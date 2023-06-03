@@ -266,6 +266,18 @@ typedef uint32_t  jitter_type_t;
 
 #define IS_NONE_INTEGER_TYPE(t)   ( ((1<<(t)) & NONE_INTEGER_TYPES) != 0 )
 
+// convert type to unsigned int of same size
+static inline jitter_type_t uint_type(jitter_type_t type)
+{
+    return (type & ~BASE_TYPE_MASK) | UINT;
+}
+
+// convert type to int type of same size
+static inline jitter_type_t int_type(jitter_type_t type)
+{
+    return (type & ~BASE_TYPE_MASK) | INT;
+}
+
 typedef vint8_t vector_t;
 
 typedef uint32_t jitter_type_flags_t;

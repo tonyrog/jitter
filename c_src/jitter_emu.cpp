@@ -76,8 +76,8 @@
 	}							\
     } while(0)
 
-// SLLI / ADDI / SUBI
-#define TFRdi8(t,d,i,imm,op) do {				\
+// ADDI / SUBI / MULI / SLLI / ANDI / ORI / XORI
+#define EMU_XXS_rrb(t,d,i,imm,op) do {				\
 	switch((t)) {						\
 	case UINT8:   FRdi8(u8,(d),(i),(imm),op); break;	\
 	case UINT16:  FRdi8(u16,(d),(i),(imm),op); break;	\
@@ -166,7 +166,7 @@
     } while(0)
 
 // ADD / SUB / MUL 
-#define TFRdij(t,d,i,j,op) do {					\
+#define EMU_XXX_rrr(t,d,i,j,op) do {				\
 	switch((t)) {						\
 	case UINT8:   FRdij(u8,(d),(i),(j),op); break;		\
 	case UINT16:  FRdij(u16,(d),(i),(j),op); break;		\
@@ -280,10 +280,16 @@
 	    v[d].fld[k] = op(v[i].fld[k]);		\
     } while(0)
 
-#define KFVdij(fld,d,i,j,op) do {			\
+#define KFV_vvv(fld,d,i,j,op) do {			\
 	unsigned int k;					\
 	for (k=0; k<VSIZE/sizeof(v[0].fld[0]);k++)	\
 	    v[d].fld[k] = op(v[i].fld[k],v[j].fld[k]);	\
+    } while(0)
+
+#define KFV_vvr(fd,fi,fj,d,i,j,op) do {			\
+	unsigned int k;					\
+	for (k=0; k<VSIZE/sizeof(v[0].fd[0]);k++)	\
+	    v[d].fd[k] = op(v[i].fi[k],r[j].fj);	\
     } while(0)
 
 #define KFFVdi(ifld,ofld,d,i,op) do {			\
@@ -312,52 +318,68 @@
 // svx - all types return signed integer (compare etc)
 //
 // VSLL/VSRL/VSRA
-#define vi_dij(t,d,i,j,op) do {					\
-    switch((t)) {							\
-    case UINT8:   KFVdij(vu8,(d),(i),(j),op); break;			\
-    case UINT16:  KFVdij(vu16,(d),(i),(j),op); break;			\
-    case UINT32:  KFVdij(vu32,(d),(i),(j),op); break;			\
-    case UINT64:  KFVdij(vu64,(d),(i),(j),op); break;			\
-    case INT8:    KFVdij(vi8,(d),(i),(j),op); break;			\
-    case INT16:   KFVdij(vi16,(d),(i),(j),op); break;			\
-    case INT32:   KFVdij(vi32,(d),(i),(j),op); break;			\
-    case INT64:   KFVdij(vi64,(d),(i),(j),op); break;			\
-    default: break;							\
-    }									\
+#define EMU_IIU_vvr(t,d,i,j,op) do {					\
+	switch((t)) {							\
+	case UINT8:   KFV_vvr(vu8,vu8,u8,(d),(i),(j),op); break;	\
+	case UINT16:  KFV_vvr(vu16,vu16,u16,(d),(i),(j),op); break;	\
+	case UINT32:  KFV_vvr(vu32,vu32,u32,(d),(i),(j),op); break;	\
+	case UINT64:  KFV_vvr(vu64,vu64,u64,(d),(i),(j),op); break;	\
+	case INT8:    KFV_vvr(vi8,vu8,u8,(d),(i),(j),op); break;	\
+	case INT16:   KFV_vvr(vi16,vu16,u16,(d),(i),(j),op); break;	\
+	case INT32:   KFV_vvr(vi32,vu32,u32,(d),(i),(j),op); break;	\
+	case INT64:   KFV_vvr(vi64,vu64,u64,(d),(i),(j),op); break;	\
+	default: break;							\
+	}								\
     } while(0)
+
+// VSRA
+#define EMU_ISU_vvr(t,d,i,imm,op) do { 				\
+	switch((t)) {						\
+	case UINT8:   KFV_vvr(vu8,vi8,u8,(d),(i),(j),op); break;	\
+	case UINT16:  KFV_vvr(vu16,vi16,u16,(d),(i),(j),op); break;	\
+	case UINT32:  KFV_vvr(vu32,vi32,u32,(d),(i),(j),op); break;	\
+	case UINT64:  KFV_vvr(vu64,vi64,u64,(d),(i),(j),op); break;	\
+	case INT8:    KFV_vvr(vi8,vi8,u8,(d),(i),(j),op); break;	\
+	case INT16:   KFV_vvr(vi16,vi16,u16,(d),(i),(j),op); break;	\
+	case INT32:   KFV_vvr(vi32,vi32,u32,(d),(i),(j),op); break;	\
+	case INT64:   KFV_vvr(vi64,vi64,u64,(d),(i),(j),op); break;	\
+	default: break;							\
+	}								\
+    } while(0)
+
 
 // VMOV/VNEG/
 #define vx_di(t,d,i,op) do {					\
-    switch((t)) {						\
-    case UINT8:   KFVdi(vu8,(d),(i),op); break;			\
-    case UINT16:  KFVdi(vu16,(d),(i),op); break;		\
-    case UINT32:  KFVdi(vu32,(d),(i),op); break;		\
-    case UINT64:  KFVdi(vu64,(d),(i),op); break;		\
-    case INT8:    KFVdi(vi8,(d),(i),op); break;			\
-    case INT16:   KFVdi(vi16,(d),(i),op); break;		\
-    case INT32:   KFVdi(vi32,(d),(i),op); break;		\
-    case INT64:   KFVdi(vi64,(d),(i),op); break;		\
-    case FLOAT16: KFVdi(vf16,(d),(i),op); break;		\
-    case FLOAT32: KFVdi(vf32,(d),(i),op); break;		\
-    case FLOAT64: KFVdi(vf64,(d),(i),op); break;		\
-    default: break;						\
-    }								\
-  } while(0)
+	switch((t)) {						\
+	case UINT8:   KFVdi(vu8,(d),(i),op); break;		\
+	case UINT16:  KFVdi(vu16,(d),(i),op); break;		\
+	case UINT32:  KFVdi(vu32,(d),(i),op); break;		\
+	case UINT64:  KFVdi(vu64,(d),(i),op); break;		\
+	case INT8:    KFVdi(vi8,(d),(i),op); break;		\
+	case INT16:   KFVdi(vi16,(d),(i),op); break;		\
+	case INT32:   KFVdi(vi32,(d),(i),op); break;		\
+	case INT64:   KFVdi(vi64,(d),(i),op); break;		\
+	case FLOAT16: KFVdi(vf16,(d),(i),op); break;		\
+	case FLOAT32: KFVdi(vf32,(d),(i),op); break;		\
+	case FLOAT64: KFVdi(vf64,(d),(i),op); break;		\
+	default: break;						\
+	}							\
+    } while(0)
 
 // VADD/VSUB/VRSUB/VMUL
 #define vx_dij(t,d,i,j,op) do {					\
     switch((t)) {						\
-    case UINT8:   KFVdij(vu8,(d),(i),(j),op); break;		\
-    case UINT16:  KFVdij(vu16,(d),(i),(j),op); break;		\
-    case UINT32:  KFVdij(vu32,(d),(i),(j),op); break;		\
-    case UINT64:  KFVdij(vu64,(d),(i),(j),op); break;		\
-    case INT8:    KFVdij(vi8,(d),(i),(j),op); break;		\
-    case INT16:   KFVdij(vi16,(d),(i),(j),op); break;		\
-    case INT32:   KFVdij(vi32,(d),(i),(j),op); break;		\
-    case INT64:   KFVdij(vi64,(d),(i),(j),op); break;		\
-    case FLOAT16: KFVdij(vf16,(d),(i),(j),op); break;		\
-    case FLOAT32: KFVdij(vf32,(d),(i),(j),op); break;		\
-    case FLOAT64: KFVdij(vf64,(d),(i),(j),op); break;		\
+    case UINT8:   KFV_vvv(vu8,(d),(i),(j),op); break;		\
+    case UINT16:  KFV_vvv(vu16,(d),(i),(j),op); break;		\
+    case UINT32:  KFV_vvv(vu32,(d),(i),(j),op); break;		\
+    case UINT64:  KFV_vvv(vu64,(d),(i),(j),op); break;		\
+    case INT8:    KFV_vvv(vi8,(d),(i),(j),op); break;		\
+    case INT16:   KFV_vvv(vi16,(d),(i),(j),op); break;		\
+    case INT32:   KFV_vvv(vi32,(d),(i),(j),op); break;		\
+    case INT64:   KFV_vvv(vi64,(d),(i),(j),op); break;		\
+    case FLOAT16: KFV_vvv(vf16,(d),(i),(j),op); break;		\
+    case FLOAT32: KFV_vvv(vf32,(d),(i),(j),op); break;		\
+    case FLOAT64: KFV_vvv(vf64,(d),(i),(j),op); break;		\
     default: break;						\
     }								\
   } while(0)
@@ -465,10 +487,10 @@
 // VCMPx
 #define svx_dij(t,d,i,j,op) do {				\
     switch((t)) {						\
-    case UINT8:   KFFVdij(vu8,vi8,(d),(i),(j),op); break;	\
-    case UINT16:  KFFVdij(vu16,vi16,(d),(i),(j),op); break;	\
-    case UINT32:  KFFVdij(vu32,vi32,(d),(i),(j),op); break;	\
-    case UINT64:  KFFVdij(vu64,vi64,(d),(i),(j),op); break;	\
+    case UINT8:   KFFVdij(vi8,vu8,(d),(i),(j),op); break;	\
+    case UINT16:  KFFVdij(vi16,vu16,(d),(i),(j),op); break;	\
+    case UINT32:  KFFVdij(vi32,vu32,(d),(i),(j),op); break;	\
+    case UINT64:  KFFVdij(vi64,vu64,(d),(i),(j),op); break;	\
     case INT8:    KFFVdij(vi8,vi8,(d),(i),(j),op); break;	\
     case INT16:   KFFVdij(vi16,vi16,(d),(i),(j),op); break;	\
     case INT32:   KFFVdij(vi32,vi32,(d),(i),(j),op); break;	\
@@ -483,10 +505,10 @@
 // VCMPxxI
 #define svx_di8(t,d,i,imm,op) do {				\
     switch((t)) {						\
-    case UINT8:   KFFVdi8(vu8,vi8,(d),(i),(imm),op); break;	\
-    case UINT16:  KFFVdi8(vu16,vi16,(d),(i),(imm),op); break;	\
-    case UINT32:  KFFVdi8(vu32,vi32,(d),(i),(imm),op); break;	\
-    case UINT64:  KFFVdi8(vu64,vi64,(d),(i),(imm),op); break;	\
+    case UINT8:   KFFVdi8(vi8,vu8,(d),(i),(imm),op); break;	\
+    case UINT16:  KFFVdi8(vi16,vu16,(d),(i),(imm),op); break;	\
+    case UINT32:  KFFVdi8(vi32,vu32,(d),(i),(imm),op); break;	\
+    case UINT64:  KFFVdi8(vi64,vu64,(d),(i),(imm),op); break;	\
     case INT8:    KFFVdi8(vi8,vi8,(d),(i),(imm),op); break;	\
     case INT16:   KFFVdi8(vi16,vi16,(d),(i),(imm),op); break;	\
     case INT32:   KFFVdi8(vi32,vi32,(d),(i),(imm),op); break;	\
@@ -565,12 +587,13 @@ void emu_vbnot(uint8_t type, vscalar0_t v[16], int d, int i)
 
 void emu_add(uint8_t type, scalar0_t r[16], int d, int i, int j)
 {
-    TFRdij(type,d,i,j,op_add); 
+    EMU_XXX_rrr(type,d,i,j,op_add);     
 }
 
 void emu_addi(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_add);
+    EMU_XXS_rrb(type,d,i,imm,op_add);
+    // TFRdi8(type,d,i,imm,op_add);
 }
 
 void emu_vaddi(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
@@ -585,12 +608,13 @@ void emu_vadd(uint8_t type, vscalar0_t v[16], int d, int i, int j)
 
 void emu_sub(uint8_t type, scalar0_t r[16], int d, int i, int j)
 {
-    TFRdij(type,d,i,j,op_sub); 
+    EMU_XXX_rrr(type,d,i,j,op_sub); 
 }
 
 void emu_subi(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_sub);    
+    EMU_XXS_rrb(type,d,i,imm,op_sub);
+    // TFRdi8(type,d,i,imm,op_sub);    
 }
 
 void emu_vsub(uint8_t type, vscalar0_t v[16], int d, int i, int j)
@@ -607,7 +631,7 @@ void emu_vsubi(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
 
 void emu_rsub(uint8_t type, scalar0_t r[16], int d, int i, int j)
 {
-    TFRdij(type,d,j,i,op_sub); 
+    EMU_XXX_rrr(type,d,j,i,op_sub); 
 }
 
 void emu_rsubi(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
@@ -627,12 +651,13 @@ void emu_vrsubi(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
 
 void emu_mul(uint8_t type, scalar0_t r[16], int d, int i, int j)
 {
-    TFRdij(type,d,i,j,op_mul); 
+    EMU_XXX_rrr(type,d,i,j,op_mul); 
 }
 
 void emu_muli(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_mul);
+    EMU_XXS_rrb(type,d,i,imm,op_mul);
+//    TFRdi8(type,d,i,imm,op_mul);
 }
 
 void emu_vmul(uint8_t type, vscalar0_t v[16], int d, int i, int j)
@@ -652,13 +677,14 @@ void emu_sll(uint8_t type, scalar0_t r[16], int d, int i, int j)
 
 void emu_slli(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFIRdi8(type,d,i,imm,op_sll);
+    EMU_XXS_rrb(type,d,i,imm,op_sll);
     // TFRdi8(type,d,i,imm,op_sll);
 }
 
-void emu_vsll(uint8_t type, vscalar0_t v[16], int d, int i, int j)
+void emu_vsll(uint8_t type, vscalar0_t v[16], scalar0_t r[16],
+	      int d, int i, int j)
 {
-    vi_dij(type,d,i,j,op_sll); 
+    EMU_IIU_vvr(type,d,i,j,op_sll); 
 }
 
 void emu_vslli(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
@@ -676,9 +702,10 @@ void emu_srli(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
     TFURdi8(type,d,i,imm,op_srl);
 }
 
-void emu_vsrl(uint8_t type, vscalar0_t v[16], int d, int i, int j)
+void emu_vsrl(uint8_t type, vscalar0_t v[16], scalar0_t r[16],
+	      int d, int i, int j)
 {
-    vi_dij(type,d,i,j,op_srl); 
+    EMU_IIU_vvr(type,d,i,j,op_srl); 
 }
 
 void emu_vsrli(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
@@ -696,9 +723,10 @@ void emu_srai(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
     TFIRdi8(type,d,i,imm,op_sra);
 }
 
-void emu_vsra(uint8_t type, vscalar0_t v[16], int d, int i, int j)
+void emu_vsra(uint8_t type, vscalar0_t v[16],  scalar0_t r[16],
+	      int d, int i, int j)
 {
-    vi_dij(type,d,i,j,op_sra);     
+    EMU_ISU_vvr(type,d,i,j,op_sra);
 }
 
 void emu_vsrai(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
@@ -719,7 +747,8 @@ void emu_band(uint8_t type, scalar0_t r[16], int d, int i, int j)
 
 void emu_bandi(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_band);
+    EMU_XXS_rrb(type,d,i,imm,op_band);
+//    TFRdi8(type,d,i,imm,op_band);
 }
 
 void emu_vband(uint8_t type, vscalar0_t v[16], int d, int i, int j)
@@ -735,7 +764,8 @@ void emu_vbandi(uint8_t type, vscalar0_t v[16], int d, int i, int8_t imm)
 
 void emu_bori(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_bor);
+    EMU_XXS_rrb(type,d,i,imm,op_bor);
+//    TFRdi8(type,d,i,imm,op_bor);
 }
 
 void emu_vbor(uint8_t type, vscalar0_t v[16], int d, int i, int j)
@@ -756,7 +786,8 @@ void emu_bxor(uint8_t type, scalar0_t r[16], int d, int i, int j)
 
 void emu_bxori(uint8_t type, scalar0_t r[16], int d, int i, int8_t imm)
 {
-    TFRdi8(type,d,i,imm,op_bxor);
+    EMU_XXS_rrb(type,d,i,imm,op_bxor);
+//    TFRdi8(type,d,i,imm,op_bxor);
 }
 
 void emu_vbxor(uint8_t type, vscalar0_t v[16], int d, int i, int j)
@@ -938,17 +969,17 @@ next:
 	
     case OP_SLL: emu_sll(p->type, r, p->rd, p->ri, p->rj); break;
     case OP_SLLI: emu_slli(p->type, r, p->rd, p->ri, p->imm8); break;
-    case OP_VSLL: emu_vsll(p->type, v, p->rd, p->ri, p->rj); break;
+    case OP_VSLL: emu_vsll(p->type, v, r, p->rd, p->ri, p->rj); break;
     case OP_VSLLI: emu_vslli(p->type, v, p->rd, p->ri, p->imm8); break;
 	
     case OP_SRL: emu_srl(p->type, r, p->rd, p->ri, p->rj); break;
     case OP_SRLI: emu_srli(p->type, r, p->rd, p->ri, p->imm8); break;
-    case OP_VSRL: emu_vsrl(p->type, v, p->rd, p->ri, p->rj); break;	
+    case OP_VSRL: emu_vsrl(p->type, v, r, p->rd, p->ri, p->rj); break;	
     case OP_VSRLI: emu_vsrli(p->type, v, p->rd, p->ri, p->imm8); break;		
 
     case OP_SRA: emu_sra(p->type, r, p->rd, p->ri, p->rj); break;
     case OP_SRAI: emu_srai(p->type, r, p->rd, p->ri, p->imm8); break;
-    case OP_VSRA: emu_vsra(p->type, v, p->rd, p->ri, p->rj); break;	
+    case OP_VSRA: emu_vsra(p->type, v, r, p->rd, p->ri, p->rj); break;	
     case OP_VSRAI: emu_vsrai(p->type, v, p->rd, p->ri, p->imm8); break;
 	
     case OP_BOR: emu_bor(p->type, r, p->rd, p->ri, p->rj); break;
@@ -964,7 +995,7 @@ next:
     case OP_BXOR: emu_bxor(p->type, r, p->rd, p->ri, p->rj); break;
     case OP_BXORI: emu_bxori(p->type, r, p->rd, p->ri, p->imm8); break;
     case OP_VBXOR: emu_vbxor(p->type, v, p->rd, p->ri, p->rj); break;
-    case OP_VBXORI: emu_vbxor(p->type, v, p->rd, p->ri, p->imm8); break;
+    case OP_VBXORI: emu_vbxori(p->type, v, p->rd, p->ri, p->imm8); break;
 	
     case OP_CMPLT: emu_cmplt(p->type, r, p->rd, p->ri, p->rj); break;
     case OP_CMPLTI: emu_cmplti(p->type, r, p->rd, p->ri, p->imm8); break;

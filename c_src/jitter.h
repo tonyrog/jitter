@@ -6,8 +6,42 @@
 #define OP_IMM   0x20  // Rj is replaced with imm8 / imm12 (mov)
 #define OP_MASK  0x1F  // 1..31 BIN 1..31 BIN|VEC etc
 // FIXME: make register machine 8 vector regs?
-
-// Unary ops
+//
+// FIXME: add formats
+// JFMT_<type>_<dst><arg1><arg2>
+//       r = scalar register
+//       v = vector register
+//       b = immediate 8-bit (byte)
+//       w = immediate 16-bit (word)
+//       o = immediate 24-bit (offset)
+// type field <type>:
+//       X = all types
+//       I = integer types
+//       S = signed integer type
+//       U = unsigned integer types
+//       F = float types
+//
+// JFMT_ttt_rrr
+//
+// JFMT           ()
+// JFMT_X_r       (rs)           ret
+// JFMT_X_v       (vs)           vret
+// JFMT_S_o       (imm)          jmp
+// JFMT_IS_rc     (rd,imm)       jz, jnz, movi
+// JFMT_XX_rr     (rd,rs)        neg, mov, ..
+// JFMT_XXX_rrr   (rd,rs1,rs2)   add, ..
+// JFMT_IXX_rrr   (rd,rs1,rs2)   band, ..
+// JFMT_XXS_rrb   (rd,rs,imm)    addi, ...
+// JFMT_XX_vo     (vd,imm)       vmovi
+// JFMT_XX_vv     (vd,vs)        vneg, vmov, ...
+// JFMT_XXX_vvv   (vd,vs1,vs2)   vadd, ...
+// JFMT_IIU_vvr   (vd,vs1,rs2)   vsll
+// JFMT_IIU_vvb   (vd,vs,imm)    vaddi, vslli,
+//
+// FOMAT:4 OP:4  TYPE:5, _:3, Rd:4, Ri:4, Rj:4, _:4
+// FOMAT:4 OP:4  TYPE:5, _:3, Rd:4, Ri:4, Imm:8
+// FOMAT:4 OP:4  TYPE:5, _:3, Rd:4, Imm:12
+//
 
 #define    OP_NOP   0
 #define    OP_VNOP  (OP_NOP|OP_VEC)  // same as nop

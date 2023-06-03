@@ -9,14 +9,25 @@ using namespace asmjit;
 #include "jitter.h"
 #include "jitter_asm.h"
 
+// A simple error handler implementation, extend according to your needs.
+class MyErrorHandler : public ErrorHandler {
+public:
+  void handleError(Error err, const char* message, BaseEmitter* origin) override {
+    printf("AsmJit error: %s\n", message);
+  }
+};
+
 extern void assemble(ZAssembler &a, const Environment &env,
-		     x86::Reg dst, x86::Reg src1, x86::Reg src2,
+		     uint32_t reg_mask,
+		     x86::Mem save_ptr,
 		     instr_t* code, size_t n);
+
 extern void emulate(scalar0_t r[16], vscalar0_t v[16], instr_t* code,
 		    size_t n, int* ret);
 
 extern void sprint(FILE* f,uint8_t type, scalar0_t v);
 extern int  scmp(uint8_t type, scalar0_t v1, scalar0_t v2);
+extern void x86_info(void);
 
 extern x86::Vec xreg(int i);
 extern x86::Vec yreg(int i);
@@ -123,7 +134,7 @@ static const char* asm_opname(uint8_t op)
     case OP_CMPLT: return "cmplt";
     case OP_CMPLTI: return "cmplti";
     case OP_VCMPLT:  return "vcmplt";
-    case OP_VCMPLTI:  return "vcmpltI";
+    case OP_VCMPLTI:  return "vcmplti";
 	
     case OP_CMPLE: return "cmple";
     case OP_CMPLEI: return "cmplei";
@@ -246,9 +257,8 @@ size_t code_size(instr_t* code)
     return len+1;
 }
 
-typedef void (*vecfun2_t)(vector_t* dst, const vector_t* a, const vector_t* b);
-typedef void (*fun2_t)(scalar0_t* dst, const scalar0_t* a, const scalar0_t* b);
-
+// pass pointer to area with register data, return fxsave64 area
+typedef void* (*fun1_t)(void* reg_data);
 
 int64_t value_u8_0[16] =
 { 0,1,2,5,10,20,50,70,127,128,130,150,180,253,254,255};
@@ -317,7 +327,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_u8_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_u8_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_u8_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case INT8:
@@ -325,7 +334,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_i8_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_i8_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_i8_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case UINT16:
@@ -333,7 +341,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_u16_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_u16_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_u16_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case INT16:
@@ -341,7 +348,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_i16_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_i16_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_i16_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case UINT32:
@@ -349,7 +355,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_u32_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_u32_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_u32_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case FLOAT32:
@@ -358,7 +363,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_i32_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_i32_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_i32_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case UINT64:
@@ -366,7 +370,6 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_u64_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_u64_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_u64_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     case INT64:
@@ -375,11 +378,14 @@ int load_vreg(jitter_type_t type, int j, int jval,
 	    set_element_int64(type, vreg[r0], i, value_i64_0[i]);
 	    set_element_int64(type, vreg[r1], i, value_i64_1[i]);
 	    set_element_int64(type, vreg[r2], i, value_i64_2[i]);
-	    if (jval>=0) set_element_int64(type, vreg[j], i, jval);
 	}
 	break;
     default:
 	break;
+    }
+    if (jval>=0) {
+	set_element_int64(UINT64, vreg[j], 0, jval);
+	set_element_int64(UINT64, vreg[j], 1, 0);
     }
     return 0;
 }
@@ -393,53 +399,48 @@ int load_reg(jitter_type_t type, int i, int j, int jval,
 	reg[r0].u8 = value_u8_0[i & 0xf];
 	reg[r1].u8 = value_u8_1[i & 0xf];
 	reg[r2].u8 = value_u8_2[i & 0xf];
-	if (jval >= 0) reg[j].u8 = jval;
 	break;
     case INT8:
 	reg[r0].i8 = value_i8_0[i & 0xf];
 	reg[r1].i8 = value_i8_1[i & 0xf];
 	reg[r2].i8 = value_i8_2[i & 0xf];
-	if (jval >= 0) reg[j].i8 = jval;
 	break;
     case UINT16:
 	reg[r0].u16 = value_u16_0[i & 0x7];
 	reg[r1].u16 = value_u16_1[i & 0x7];
 	reg[r2].u16 = value_u16_2[i & 0x7];
-	if (jval >= 0) reg[j].u16 = jval;	
 	break;
     case INT16:
 	reg[r0].i16 = value_i16_0[i & 0x7];
 	reg[r1].i16 = value_i16_1[i & 0x7];
 	reg[r2].i16 = value_i16_2[i & 0x7];
-	if (jval >= 0) reg[j].i16 = jval;		
 	break;
     case UINT32:
 	reg[r0].u32 = value_u32_0[i & 0x3];
 	reg[r1].u32 = value_u32_1[i & 0x3];
 	reg[r2].u32 = value_u32_2[i & 0x3];
-	if (jval >= 0) reg[j].u32 = jval;
 	break;
     case INT32:
 	reg[r0].i32 = value_i32_0[i & 0x3];
 	reg[r1].i32 = value_i32_1[i & 0x3];
 	reg[r2].i32 = value_i32_2[i & 0x3];
-	if (jval >= 0) reg[j].i32 = jval;
 	break;
     case UINT64:
 	reg[r0].u64 = value_u64_0[i & 0x1];
 	reg[r1].u64 = value_u64_1[i & 0x1];
 	reg[r2].u64 = value_u64_2[i & 0x1];
-	if (jval >= 0) reg[j].u64 = jval;
 	break;
     case INT64:
 	reg[r0].i64 = value_i64_0[i & 0x1];
 	reg[r1].i64 = value_i64_1[i & 0x1];
 	reg[r2].i64 = value_i64_2[i & 0x1];
-	if (jval >= 0) reg[j].i64 = jval;
 	break;
     default:
 	break;
     }
+    if (jval>=0) {
+	if (jval >= 0) reg[j].i64 = jval;
+    }    
     return 0;
 }
 
@@ -526,11 +527,18 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 	       instr_t* icode, size_t code_len)
 {
     JitRuntime rt;           // Runtime designed for JIT code execution
+    MyErrorHandler myErrorHandler;
     CodeHolder code;         // Holds code and relocation information
     FileLogger logger(stderr);
+    Label save_label;
+    Section* xmm_data;
+    int res;
     
     // Initialize to the same arch as JIT runtime
     code.init(rt.environment(), rt.cpuFeatures());
+    code.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);
+    code.setErrorHandler(&myErrorHandler);
+    
     ZAssembler a(&code, 1024);
 
     scalar0_t  rr[16], rr_save[16];  // regular registers
@@ -540,38 +548,57 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
     memset(vr, 0, sizeof(vr));
 
     load_reg(itype, i, icode->rj, jval, rr, 0, 1, 2);
+    load_vreg(itype, icode->rj, jval, (vector_t*)vr, 0, 1, 2);    
 
     if (verbose) {
 	fprintf(stderr, "TEST ");
 	icode[0].type = itype; // otherwise set by test_code!
 	print_instr(stderr, icode);
-	fprintf(stderr, " %s=", "r0");
-	sprint(stderr, itype, rr[0]);
-	fprintf(stderr, " %s=", "r1");
-	sprint(stderr, itype, rr[1]);
-	fprintf(stderr, " %s=", "r2");
-	sprint(stderr, itype, rr[2]);		
+	if (jval >= 0) fprintf(stderr, " jval=%d", jval);
+
+	fprintf(stderr, "\nreg_data.r0 = "); sprint(stderr, itype, rr[0]);
+	fprintf(stderr, "\nreg_data.r1 = "); sprint(stderr, itype, rr[1]);
+	fprintf(stderr, "\nreg_data.r2 = "); sprint(stderr, itype, rr[2]);
+	fprintf(stderr,"\n");		
     }
 
     if (debug) {
 	a.setLogger(&logger);
     }
 
+    // register must be passed in order! xmm 0...15 gp 0...15
+    uint32_t reg_mask = (1 << 16) | (1 << 17) | (1 << 18);
+    struct {
+	scalar0_t r0;
+	scalar0_t r1;
+	scalar0_t r2;
+    } reg_data;
+
+
     set_type(itype, icode, code_len);
 
+    save_label = a.newLabel();
+
+    a.disable_avx();
+    
     assemble(a, rt.environment(),
-	     reg(2), reg(0), reg(1),
+	     reg_mask,  // r8,r9,r10
+	     x86::ptr(save_label),
 	     icode, code_len);
 
-    fun2_t fn;
+    a.section(xmm_data);
+    a.bind(save_label);
+    a.embedDataArray(TypeId::kUInt8, "\0", 1, 512);
+
+    fun1_t fn;
     Error err = rt.add(&fn, &code);   // Add the generated code to the runtime.
     if (err) {
 	fprintf(stderr, "rt.add ERROR\n");
 	return -1;               // Handle a possible error case.
     }
+    
 
     scalar0_t rexe, remu;
-    // fprintf(stderr, "code is added %p\n", fn);
     memcpy(rr_save, rr, sizeof(rr));
     memcpy(vr_save, vr, sizeof(vr));
 
@@ -582,12 +609,29 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
     memcpy(rr, rr_save, sizeof(rr));
     memcpy(vr, vr_save, sizeof(vr));
 
-    fn((scalar0_t*)&rr[2], (scalar0_t*)&rr[0], (scalar0_t*)&rr[1]);
-    memcpy(&rexe, &rr[2], sizeof(scalar0_t));
-    rt.release(fn);
+    reg_data.r0 = rr[0];
+    reg_data.r1 = rr[1];    
+    reg_data.r2 = rr[2];
 
+    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&reg_data);
+    memcpy(&rexe, &reg_data.r2, sizeof(scalar0_t));
+
+    // print some xmm register direcly from fxsave64 output
+    res = scmp(otype, remu, rexe);
+    if (res != 0) {
+	if (debug || debug_on_fail) {
+	    fprintf(stderr, "\nxmm_save=%p\n", xmm_save);
+	    for (i = 0; i < 16; i++) {
+		fprintf(stderr, "xmm%d = ", i);
+		vprint(stderr, itype, (vector_t)xmm_save->xmm[i]);
+		fprintf(stderr,"\n");
+	    }
+	}
+    }
+    rt.release(fn);
+    
     // compare output from emu and exe
-    if (scmp(otype, remu, rexe) != 0) {
+    if (res != 0) {
 	if (verbose)
 	    fprintf(stderr, " FAIL\n");
 	if (debug_on_fail) {
@@ -601,13 +645,21 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 	    CodeHolder code1;
 
 	    code1.init(rt.environment(), rt.cpuFeatures());
+	    code1.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);	    
 	    ZAssembler b(&code1,1024);
 	    
 	    b.setLogger(&logger);
-	    
+
+	    save_label = b.newLabel();
+
+	    b.disable_avx();
 	    assemble(b, rt.environment(),
-		     reg(2), reg(0), reg(1),
+		     reg_mask,  // r8,r9,r10
+		     x86::ptr(save_label),
 		     icode, code_len);
+	    b.section(xmm_data);
+	    b.bind(save_label);
+	    b.embedDataArray(TypeId::kUInt8, "\0", 1, 512);
 	}
 	if (exit_on_fail)
 	    exit(1);
@@ -638,24 +690,42 @@ int test_code(jitter_type_t itype, jitter_type_t otype, int jval, instr_t* icode
     return failed;
 }
 
-
 int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 	       instr_t* icode, size_t code_len)
 {
     JitRuntime rt;           // Runtime designed for JIT code execution
+    MyErrorHandler myErrorHandler;    
     CodeHolder code;         // Holds code and relocation information
-    int i;
+    int i, res;
     FileLogger logger(stderr);
-    
-    // Initialize to the same arch as JIT runtime
-    code.init(rt.environment(), rt.cpuFeatures()); 
+    Label save_label;
+    Section* xmm_data;
+    // register must be passed in order! xmm 0...15 gp 0...15
+    uint32_t reg_mask;
+    struct {
+	vscalar0_t v0;
+	vscalar0_t v1;
+	vscalar0_t v2;	
+	scalar0_t  r0;
+    } reg_data;
 
+    if (jval >= 0)
+	reg_mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << (16+icode->rj));
+    else
+	reg_mask = (1 << 0) | (1 << 1) | (1 << 2); 
+
+    // Initialize to the same arch as JIT runtime
+    code.init(rt.environment(), rt.cpuFeatures());
+    code.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);
+    code.setErrorHandler(&myErrorHandler);
+    
     ZAssembler a(&code, 1024);  // Create and attach x86::Assembler to `code`
 
     if (verbose) {
 	fprintf(stderr, "TEST ");
 	icode[0].type = itype; // otherwise set by test_code!
 	print_instr(stderr, icode);
+	if (jval >= 0) fprintf(stderr, " jval=%d", jval);
     }
 
     if (debug)
@@ -663,12 +733,18 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 
     set_type(itype, icode, code_len);
 
+    save_label = a.newLabel();
+
     a.disable_avx();
     assemble(a, rt.environment(),
-	     xreg(2), xreg(0), xreg(1),
+	     reg_mask,  // xmm0,xmm1,xmm2
+	     x86::ptr(save_label),
 	     icode, code_len);
-
-    vecfun2_t fn;
+    a.section(xmm_data);
+    a.bind(save_label);
+    a.embedDataArray(TypeId::kUInt8, "\0", 1, 512);
+    
+    fun1_t fn;
     Error err = rt.add(&fn, &code);   // Add the generated code to the runtime.
     if (err) {
 	fprintf(stderr, "rt.add ERROR\n");
@@ -683,8 +759,9 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
     memset(rr, 0, sizeof(rr));
     memset(vr, 0, sizeof(vr));
 
+    load_reg(itype, 0, icode->rj, jval, rr, 0, 1, 2);
     load_vreg(itype, icode->rj, jval, (vector_t*)vr, 0, 1, 2);
-    
+
     vector_t rexe, remu;
 
     // save for emu run
@@ -694,39 +771,87 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
     emulate(rr, vr, icode, code_len, &i);  // i is the register returned
     memcpy(&remu, &vr[i], sizeof(vector_t));   // save result
 
+    
     // fprintf(stderr, "\ncalling fn\n");
     // restore state!
     memcpy(rr, rr_save, sizeof(rr));
-    memcpy(vr, vr_save, sizeof(vr));    
+    memcpy(vr, vr_save, sizeof(vr));
 
-    fn((vector_t*)&vr[2], (vector_t*)&vr[0], (vector_t*)&vr[1]);
-    memcpy(&rexe, &vr[2], sizeof(vector_t));  // save result
-    rt.release(fn);
+    reg_data.v0 = vr[0];
+    reg_data.v1 = vr[1];
+    reg_data.v2 = vr[2];
+    reg_data.r0 = rr[icode->rj];
+
+    if (debug) {
+	fprintf(stderr, "\nreg_data.v0 = "); vprint(stderr, itype, reg_data.v0.v);
+	fprintf(stderr, "\nreg_data.v1 = "); vprint(stderr, itype, reg_data.v1.v);
+	fprintf(stderr, "\nreg_data.v2 = "); vprint(stderr, itype, reg_data.v2.v);
+	fprintf(stderr, "\nreg_data.r%d = ", icode->rj); sprint(stderr, itype, reg_data.r0);
+	fprintf(stderr,"\n");
+    }
+
+    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&reg_data);
+
+    memcpy(&rexe, &reg_data.v2, sizeof(vector_t));
 
     // compare output from emu and exe
-    if (vcmp(otype, remu, rexe) != 0) {
+    res = vcmp(otype, remu, rexe);
+
+    if (res != 0) {
+    // print some xmm register direcly from fxsave64 output
+	if (debug_on_fail || debug) {
+	    fprintf(stderr, "\nxmm_save=%p\n", xmm_save);
+	    for (i = 0; i < 16; i++) {
+		fprintf(stderr, "xmm%d = ", i);
+		vprint(stderr, itype, (vector_t)xmm_save->xmm[i]);
+		fprintf(stderr,"\n");
+	    }
+
+	    for (i = 0; i < 16; i++) {
+		fprintf(stderr, "xmm%d = ", i);
+		vprint(stderr, INT16, (vector_t)xmm_save->xmm[i]);
+		fprintf(stderr,"\n");
+	    }	    
+	}
+    }
+
+    rt.release(fn);
+    
+    if (res != 0) {
 	if (verbose)
 	    printf(" FAIL\n");
 	if (debug_on_fail) {
 	    print_code(stderr, icode, code_len);
 	    // itype = uint_type(itype);
-	    fprintf(stderr, "v0 = "); vprint(stderr, itype, vr[0].v); fprintf(stderr,"\n");
-	    fprintf(stderr, "v1 = "); vprint(stderr, itype, vr[1].v); fprintf(stderr,"\n");
-	    fprintf(stderr, "v2 = "); vprint(stderr, itype, vr[2].v); fprintf(stderr,"\n");
-	    fprintf(stderr,"exe:r = "); vprint(stderr,otype, rexe); fprintf(stderr,"\n");	
-	    fprintf(stderr,"emu:r = "); vprint(stderr,otype, remu); fprintf(stderr,"\n");
+
+	    fprintf(stderr, "\nreg_data.v0 = "); vprint(stderr, itype, reg_data.v0.v);
+	    fprintf(stderr, "\nreg_data.v1 = "); vprint(stderr, itype, reg_data.v1.v);
+	    fprintf(stderr, "\nreg_data.v2 = "); vprint(stderr, itype, reg_data.v2.v);
+	    fprintf(stderr, "\nreg_data.r%d = ", icode->rj); sprint(stderr, itype, reg_data.r0);    
+
+	    fprintf(stderr,"\nexe:r = "); vprint(stderr,otype, rexe);
+	    fprintf(stderr,"\nemu:r = "); vprint(stderr,otype, remu);
+	    fprintf(stderr,"\n");
+	    
 	    // reassemble with logging
 	    CodeHolder code1;
 	    
 	    code1.init(rt.environment(), rt.cpuFeatures());
+	    code1.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);
+	    
 	    ZAssembler b(&code1, 1024);
 	    b.setLogger(&logger);
 
-	    b.disable_avx();
+	    save_label = b.newLabel();
 
+	    b.disable_avx();
 	    assemble(b, rt.environment(),
-		     xreg(2), xreg(0), xreg(1),
+		     reg_mask,  // xmm0,xmm1,xmm2
+		     x86::ptr(save_label),
 		     icode, code_len);
+	    b.section(xmm_data);
+	    b.bind(save_label);
+	    b.embedDataArray(TypeId::kUInt8, "\0", 1, 512);
 	}
 	if (exit_on_fail)
 	    exit(1);	
@@ -927,14 +1052,14 @@ int test_bshift(uint8_t op, uint8_t* ts, uint8_t otype)
     for (i = 0; i <= 2; i++) {
 	code[0].ri = i;	
 	for (j = 0; j <= 2; j++) {
-	    uint8_t* ts1 = ts;	    
+	    uint8_t* ts1 = ts;
 	    code[0].rj = j;
 	    // load shift value
 	    while(*ts1 != VOID) {
 		int imm;
 		size_t n = (1 << get_scalar_exp_bit_size(*ts1));
 		for (imm = 0; imm < (int)n; imm++) {
-		    uint8_t tv[2];		    
+		    uint8_t tv[2];
 		    tv[0] = *ts1; tv[1] = VOID;
 		    failed += test_ts_code(tv, otype, vec, imm, code, 2);
 		}
@@ -953,6 +1078,8 @@ int main()
     printf("sizeof(scalar0_t) = %ld\n", sizeof(scalar0_t));
     printf("sizeof(vscalar0_t) = %ld\n", sizeof(vscalar0_t));
     printf("sizeof(instr_t) = %ld\n", sizeof(instr_t));
+
+    x86_info();
 
     int failed = 0;  // number of failed cases
     
@@ -976,7 +1103,7 @@ int main()
     
     uint8_t int_type[] = { INT8, VOID };
 
-//    debug = 1;
+//     debug = 1;
       exit_on_fail = 1;
       debug_on_fail = 1;
 //    instr_t code1[] = { OPdij(OP_CMPLT,2,0,2), OPd(OP_RET, 2) };
@@ -984,22 +1111,13 @@ int main()
 //    code1[1].type = UINT64;
 //    test_code(UINT64, INT64, code1, 2);    
 //    exit(0);
-    
-//    failed += test_binary(OP_MUL, int_type, VOID);
-//    exit(0);
-//    failed += test_binary(OP_VMUL, all_types, VOID);
-//      failed += test_imm8(OP_VMOVI, all_types, UINT);
-//      failed += test_imm8(OP_VMULI, all_types, UINT);    
-//    failed += test_imm8(OP_VBANDI, all_types, UINT);
-//     failed += test_imm8(OP_CMPGTI, int_types, INT);      
-/*
-    if (failed) {
-	printf("ERROR: %d cases failed\n", failed);
-	exit(1);
-    }    
-    exit(0);
-*/
-    
+//////////////////
+
+    failed += test_imm8(OP_VCMPLEI, all_types, INT);    
+
+//////////////////     
+
+
     failed += test_unary(OP_NOP, int_types, VOID); 
     failed += test_imm12(OP_MOVI, int_types, INT);
     failed += test_unary(OP_MOV, int_types, VOID); // fixme: float registers!

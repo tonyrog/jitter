@@ -22,30 +22,35 @@ class ZAssembler : public x86::Assembler {
     ConstPool* pool_;
     Label pool_label_;
     FuncFrame* frame_;
+    CodeHolder* code_;
     unsigned vec_available;
     unsigned vec_enabled;
+
 public:
     ZAssembler(CodeHolder* code, size_t zone_size) : x86::Assembler(code) {
 	z_ = new Zone(zone_size);
 	pool_ = new ConstPool(z_);
 	pool_label_ = newLabel();
+	code_ = code;
 	frame_ = NULL;
 	vec_available = 0;
-	if (code->cpuFeatures().x86().hasMMX())
-	    vec_available |= VEC_TYPE_AVX;
-	if (code->cpuFeatures().x86().hasSSE())
-	    vec_available |= VEC_TYPE_SSE;
-	if (code->cpuFeatures().x86().hasSSE2())
-	    vec_available |= VEC_TYPE_SSE2;
-	if (code->cpuFeatures().x86().hasSSE3())
-	    vec_available |= VEC_TYPE_SSE3;
-	if (code->cpuFeatures().x86().hasSSE4_1())
-	    vec_available |= VEC_TYPE_SSE4_1;
-	if (code->cpuFeatures().x86().hasAVX())
-	    vec_available |= VEC_TYPE_AVX;
-	if (code->cpuFeatures().x86().hasAVX2())
-	    vec_available |= VEC_TYPE_AVX2;
-	vec_enabled = vec_available;
+	if (code != NULL) {
+	    if (code->cpuFeatures().x86().hasMMX())
+		vec_available |= VEC_TYPE_AVX;
+	    if (code->cpuFeatures().x86().hasSSE())
+		vec_available |= VEC_TYPE_SSE;
+	    if (code->cpuFeatures().x86().hasSSE2())
+		vec_available |= VEC_TYPE_SSE2;
+	    if (code->cpuFeatures().x86().hasSSE3())
+		vec_available |= VEC_TYPE_SSE3;
+	    if (code->cpuFeatures().x86().hasSSE4_1())
+		vec_available |= VEC_TYPE_SSE4_1;
+	    if (code->cpuFeatures().x86().hasAVX())
+		vec_available |= VEC_TYPE_AVX;
+	    if (code->cpuFeatures().x86().hasAVX2())
+		vec_available |= VEC_TYPE_AVX2;
+	    vec_enabled = vec_available;
+	}
     }
 
     ~ZAssembler() {
@@ -54,6 +59,8 @@ public:
 	// what to delete?
     }
 
+    inline const CpuFeatures& cpuFeatures() const noexcept { return _code->cpuFeatures(); }
+    
     bool has_vec() { return (vec_available & VEC_TYPE_VEC) != 0; }
     bool has_mmx() { return (vec_available & VEC_TYPE_MMX) != 0; }    
     bool has_sse() { return (vec_available & VEC_TYPE_SSE) != 0; }
@@ -129,5 +136,88 @@ public:
 	return add_constant(&vvalue, sizeof(vvalue));
     }
 };
+
+typedef uint8_t st_t[10];
+typedef uint8_t mm_t __attribute__ ((vector_size (8)));
+typedef uint8_t xmm_t __attribute__ ((vector_size (16)));
+typedef uint8_t data128_t[16];
+
+typedef union {
+    struct {
+	st_t st;  // 80 bit floating point data
+	uint8_t _rsvd[6]; // reserved
+    } st;
+    struct {
+	mm_t mm;          // mmx register
+	uint8_t _pad[6];
+	uint8_t _rsvd[2];  // reserved
+    } mm;
+} st_mm_t;
+
+typedef struct {
+    uint16_t fcw;   // x87 FPU control word
+    uint16_t fsw;   // x87 FPU Status word
+    uint8_t ftw;    // x87 FPU Tag Word
+    uint8_t  _rsvd1;
+	
+    uint16_t fop;   // x87 FPU Opcode
+    uint32_t fip;   // 32-bit IP offset
+    
+    uint16_t fcs;   // x87 FPU Instruction Pointer Selector
+    uint16_t _rsvd2;
+} fxinfo32a_t;
+
+typedef struct {
+    uint32_t fdp;
+    uint32_t fds;    
+    uint32_t mxcsr;
+    uint32_t mxcsr_mask;
+} fxinfo32b_t;
+
+typedef struct {
+    fxinfo32a_t a;
+    fxinfo32b_t b;
+    st_mm_t sm[8];       // ST/MM 0-7
+    xmm_t   xmm[8];      // XMM 0-7
+    uint128_t _rsvdst_mm[11];
+    uint128_t avail[3];
+} fxsave32_t;
+
+
+typedef struct {
+    uint16_t fcw;   // x87 FPU control word
+    uint16_t fsw;   // x87 FPU Status word
+    uint8_t ftw;    // x87 FPU Tag Word
+    uint8_t  _rsvd1;
+    uint16_t fop;   // x87 FPU Opcode    
+    uint64_t fip;   // 64-bit IP offset
+} fxinfo64a_t;
+
+typedef struct {
+    uint64_t fdp;
+    uint32_t mxcsr;
+    uint32_t mxcsr_mask;
+} fxinfo64b_t;
+
+// REX.w = 1
+typedef struct {
+    fxinfo64a_t a;
+    fxinfo64b_t b;
+    st_mm_t sm[8];       // ST/MM 0-7
+    xmm_t   xmm[16];     // XMM 0-15
+    uint128_t _rsvdst_mm[3];
+    uint128_t avail[3];
+} fxsave64_1_t;
+
+// REX.w = 0
+typedef struct {
+    fxinfo32a_t a;
+    fxinfo32b_t b;
+    st_mm_t sm[8];        // ST/MM 0-7
+    xmm_t   xmm[16];      // XMM 0-15
+    uint128_t _rsvdst_mm[3];
+    uint128_t avail[3];
+} fxsave64_0_t;
+
 
 #endif

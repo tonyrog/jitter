@@ -229,7 +229,6 @@ void sprint(FILE* f, uint8_t type, scalar0_t v)
 	for (k=0; k<VSIZE/sizeof(v1[0]); k++) {	\
 	    if (v1[k] < v2[k]) return -1;	\
 	    else if (v1[k] > v2[k]) return 1;	\
-	    else return 0;			\
 	}					\
     } while(0)
 
