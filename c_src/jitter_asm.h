@@ -7,6 +7,8 @@
 
 using namespace asmjit;
 
+extern void crash(const char* filename, int line, int code);
+
 #define VEC_TYPE_MMX    (1 << 0)
 #define VEC_TYPE_SSE    (1 << 1)
 #define VEC_TYPE_SSE2   (1 << 2)
@@ -17,6 +19,9 @@ using namespace asmjit;
 // all vector flags
 #define VEC_TYPE_VEC    (0x7f)
 
+#define R_FREE_MASK 0x6c00   // r14,r13,r11,r10  01101100|00000000
+#define X_FREE_MASK 0x3800   // v13,v12,v11      00111000|00000000
+
 class ZAssembler : public x86::Assembler {
     Zone*      z_;
     ConstPool* pool_;
@@ -25,6 +30,8 @@ class ZAssembler : public x86::Assembler {
     CodeHolder* code_;
     unsigned vec_available;
     unsigned vec_enabled;
+    uint16_t r_free_mask;
+    uint16_t x_free_mask;
 
 public:
     ZAssembler(CodeHolder* code, size_t zone_size) : x86::Assembler(code) {
@@ -34,6 +41,8 @@ public:
 	code_ = code;
 	frame_ = NULL;
 	vec_available = 0;
+	r_free_mask = R_FREE_MASK;
+	x_free_mask = X_FREE_MASK;
 	if (code != NULL) {
 	    if (code->cpuFeatures().x86().hasMMX())
 		vec_available |= VEC_TYPE_AVX;
@@ -60,7 +69,8 @@ public:
     }
 
     inline const CpuFeatures& cpuFeatures() const noexcept { return _code->cpuFeatures(); }
-    
+    bool has_all(unsigned mask) { return (vec_available & mask) == mask; }
+    bool has_any(unsigned mask) { return (vec_available & mask) != 0; }
     bool has_vec() { return (vec_available & VEC_TYPE_VEC) != 0; }
     bool has_mmx() { return (vec_available & VEC_TYPE_MMX) != 0; }    
     bool has_sse() { return (vec_available & VEC_TYPE_SSE) != 0; }
@@ -70,6 +80,8 @@ public:
     bool has_avx() { return (vec_available & VEC_TYPE_AVX) != 0; }
     bool has_avx2() { return (vec_available & VEC_TYPE_AVX2) != 0; }
 
+    bool use_all(unsigned mask) { return (vec_enabled & mask) == mask; }
+    bool use_any(unsigned mask) { return (vec_enabled & mask) != 0; }    
     bool use_vec() { return (vec_enabled & VEC_TYPE_VEC) != 0; }
     bool use_mmx() { return (vec_enabled & VEC_TYPE_MMX) != 0; }    
     bool use_sse() { return (vec_enabled & VEC_TYPE_SSE) != 0; }
@@ -79,6 +91,7 @@ public:
     bool use_avx() { return (vec_enabled & VEC_TYPE_AVX) != 0; }
     bool use_avx2() { return (vec_enabled & VEC_TYPE_AVX2) != 0; }        
 
+    void disable(unsigned mask) { vec_enabled &= ~mask; }
     void disable_vec() { vec_enabled &= ~(VEC_TYPE_VEC); }        
     void disable_mmx() { vec_enabled &= ~(VEC_TYPE_MMX); }    
     void disable_avx() { vec_enabled &= ~(VEC_TYPE_AVX); }
@@ -88,6 +101,7 @@ public:
     void disable_sse3() { vec_enabled &= ~(VEC_TYPE_SSE3); }    
     void disable_sse4_1() { vec_enabled &= ~(VEC_TYPE_SSE4_1); }
 
+    void enable(unsigned mask) { vec_enabled |= (vec_available & mask); }
     void enable_vec() { vec_enabled |= (vec_available & VEC_TYPE_VEC); }        
     void enable_mmx() { vec_enabled |= (vec_available & VEC_TYPE_MMX); }        
     void enable_avx() { vec_enabled |= (vec_available & VEC_TYPE_AVX); }        
@@ -135,6 +149,37 @@ public:
 	vint8_t vvalue = vint8_t_const(value);
 	return add_constant(&vvalue, sizeof(vvalue));
     }
+
+    void reg_alloc_reset() {
+	r_free_mask = R_FREE_MASK;
+	x_free_mask = X_FREE_MASK;
+    }
+
+    int alloc_(uint16_t& mask) {
+	uint16_t m = mask;
+	int r = 16;
+	while(m && r--) {
+	    if (m & 0x8000) {
+		mask &= ~(1 << r);
+		return r;
+	    }
+	    m <<= 1;
+	}
+	return -1;
+    }
+
+    int next_(uint16_t mask, int r) {
+	while((++r < 16) && !(mask & (1 << r))) ;
+	return (r >= 16) ? -1 : r;
+    }
+    
+    int  reg_next(int r) {  return next_(r_free_mask, r); }
+    int  reg_alloc() { return alloc_(r_free_mask); }
+    void reg_release(int r) { r_free_mask |= ((1 << r) & R_FREE_MASK); }
+
+    int  xreg_next(int r) {  return next_(x_free_mask, r); }
+    int  xreg_alloc() { return alloc_(x_free_mask); }
+    void xreg_release(int v) { x_free_mask |= ((1 << v) & X_FREE_MASK); }
 };
 
 typedef uint8_t st_t[10];

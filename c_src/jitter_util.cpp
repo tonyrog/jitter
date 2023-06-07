@@ -2,6 +2,250 @@
 #include "jitter_types.h"
 #include "jitter.h"
 
+
+const char* asm_opname(uint8_t op)
+{
+    switch(op) {
+    case OP_NOP:   return "nop";
+    case OP_JMP:   return "jmp";
+    case OP_JNZ:   return "jnz";
+    case OP_JZ:    return "jz";		
+    case OP_RET:   return "ret";
+    case OP_NEG:   return "neg";
+    case OP_BNOT:  return "bnot";
+    case OP_INV:   return "inv";	
+
+    case OP_MOV:   return "mov";
+    case OP_MOVI:  return "movi";
+	
+    case OP_ADD:   return "add";
+    case OP_ADDI:  return "addi";
+    case OP_VADD:  return "vadd";	
+    case OP_VADDI:  return "vaddi";
+	
+    case OP_SUB:   return "sub";
+    case OP_SUBI:  return "subi";
+    case OP_VSUB:  return "vsub";	
+    case OP_VSUBI:  return "vsubi";
+
+    case OP_RSUB:   return "rsub";
+    case OP_RSUBI:  return "rsubi";
+    case OP_VRSUB:  return "vrsub";	
+    case OP_VRSUBI:  return "vrsubi";		
+
+    case OP_MUL:   return "mul";
+    case OP_MULI:  return "muli";
+    case OP_VMUL:  return "vmul";
+    case OP_VMULI:  return "vmuli";
+	
+    case OP_SLL:   return "sll";
+    case OP_SLLI:  return "slli";
+    case OP_VSLL:  return "vsll";	
+    case OP_VSLLI:  return "vslli";
+
+    case OP_SRL:   return "srl";	
+    case OP_SRLI:  return "srli";
+    case OP_VSRL:  return "vsrl";	
+    case OP_VSRLI:  return "vsrli";
+
+    case OP_SRA:   return "sra";
+    case OP_SRAI:  return "srai";
+    case OP_VSRA:   return "vsra";	
+    case OP_VSRAI:  return "vsrai";
+
+    case OP_BAND:  return "band";
+    case OP_BANDI:  return "bandi";	
+    case OP_VBAND:  return "vband";
+    case OP_VBANDI:  return "vbandi";
+	
+    case OP_BOR:   return "bor";
+    case OP_BORI:   return "bori";
+    case OP_VBOR:  return "vbor";
+    case OP_VBORI:  return "vbori";
+	
+    case OP_BXOR:  return "bxor";
+    case OP_BXORI:  return "bxori";	
+    case OP_VBXOR:  return "vbxor";
+    case OP_VBXORI:  return "vbxori";
+	
+    case OP_CMPLT: return "cmplt";
+    case OP_CMPLTI: return "cmplti";
+    case OP_VCMPLT:  return "vcmplt";
+    case OP_VCMPLTI:  return "vcmplti";
+	
+    case OP_CMPLE: return "cmple";
+    case OP_CMPLEI: return "cmplei";
+    case OP_VCMPLE:  return "vcmple";
+    case OP_VCMPLEI:  return "vcmplei";
+
+    case OP_CMPEQ: return "cmpeq";	
+    case OP_CMPEQI: return "cmpeqi";
+    case OP_VCMPEQ:  return "vcmpeq";
+    case OP_VCMPEQI:  return "vcmpeqi";
+
+    case OP_CMPGT: return "cmpgt";	
+    case OP_CMPGTI: return "cmpgti";
+    case OP_VCMPGT:  return "vcmpgt";
+    case OP_VCMPGTI:  return "vcmpgti";	
+	
+    case OP_CMPGE: return "cmpge";
+    case OP_CMPGEI: return "cmpgei";
+    case OP_VCMPGE:  return "vcmpge";
+    case OP_VCMPGEI:  return "vcmpgei";
+	
+    case OP_CMPNE: return "cmpne";
+    case OP_CMPNEI: return "cmpnei";	
+    case OP_VCMPNE:  return "vcmpne";
+    case OP_VCMPNEI:  return "vcmpnei";		
+
+    case OP_VRET:  return "vret";
+    case OP_VMOV:  return "vmov";
+    case OP_VMOVI:  return "vmovi";	
+    case OP_VNEG:  return "vneg";	
+    case OP_VBNOT:  return "vbnot";
+    case OP_VINV:  return "vinv";
+
+    default: return "?????";
+    }
+}
+
+const char* asm_typename(uint8_t type)
+{
+    switch(type) {
+    case UINT8:  return "u8"; 
+    case UINT16: return "u16"; 
+    case UINT32: return "u32"; 
+    case UINT64: return "u64"; 
+    case INT8:   return "i8"; 
+    case INT16:  return "i16"; 
+    case INT32:  return "i32";  
+    case INT64:  return "i64";
+    case FLOAT8: return "f8"; 	
+    case FLOAT16: return "f16"; 
+    case FLOAT32: return "f32"; 
+    case FLOAT64: return "f64";
+    default: return "??";
+    }
+}
+
+static const char* asm_regname(uint8_t op, uint8_t r)
+{
+    if (op & OP_VEC) {
+	switch(r) {
+	case 0: return "v0";
+	case 1: return "v1";
+	case 2: return "v2";
+	case 3: return "v3";
+	case 4: return "v4";
+	case 5: return "v5";
+	case 6: return "v6";
+	case 7: return "v7";
+	case 8: return "v8";
+	case 9: return "v9";
+	case 10: return "v10";
+	case 11: return "v11";
+	case 12: return "v12";
+	case 13: return "v13";
+	case 14: return "v14";
+	case 15: return "v15";
+	default: return "v?";
+	}
+    }
+    else {
+	switch(r) {
+	case 0: return "r0";
+	case 1: return "r1";
+	case 2: return "r2";
+	case 3: return "r3";
+	case 4: return "r4";
+	case 5: return "r5";
+	case 6: return "r6";
+	case 7: return "r7";
+	case 8: return "r8";
+	case 9: return "r9";
+	case 10: return "r10";
+	case 11: return "r11";
+	case 12: return "r12";
+	case 13: return "r13";
+	case 14: return "r14";
+	case 15: return "r15";
+	default: return "r?";
+	}
+    }
+}
+
+void print_instr(FILE* f,instr_t* pc)
+{
+    if (pc->op == OP_JMP) {
+	fprintf(f, "%s %d", asm_opname(pc->op), pc->imm12);
+    }
+    else if ((pc->op == OP_JNZ) || (pc->op == OP_JZ)) {
+	fprintf(f, "%s.%s %s, %d",
+		asm_opname(pc->op),
+		asm_typename(pc->type),
+		asm_regname(pc->op,pc->rd), pc->imm12);
+    }
+    else if (pc->op & OP_BIN) {
+	if (pc->op & OP_IMM) {
+	    fprintf(f, "%s.%s, %s, %s, %d",
+		    asm_opname(pc->op),
+		    asm_typename(pc->type),
+		    asm_regname(pc->op,pc->rd),
+		    asm_regname(pc->op,pc->ri),
+		    pc->imm8);
+	}
+	else {
+	    fprintf(f, "%s.%s, %s, %s, %s",
+		    asm_opname(pc->op),
+		    asm_typename(pc->type),
+		    asm_regname(pc->op,pc->rd),
+		    asm_regname(pc->op,pc->ri),
+		    asm_regname(pc->op,pc->rj));
+	}
+    }
+    else if ((pc->op == OP_MOVI)||(pc->op == OP_VMOVI)) {
+	fprintf(f, "%s.%s %s, %d",
+		asm_opname(pc->op),
+		asm_typename(pc->type),
+		asm_regname(pc->op,pc->rd), pc->imm12);
+    }
+    else {
+	if (pc->op & OP_IMM) {
+	    fprintf(f, "%s.%s, %s, %d",
+		    asm_opname(pc->op),
+		    asm_typename(pc->type),
+		    asm_regname(pc->op,pc->rd),
+		    pc->imm8);
+	}
+	else if ((pc->op & OP_MASK) == OP_NOP) {
+	    fprintf(f, "%s", asm_opname(OP_NOP));
+	}
+	else if ((pc->op & OP_MASK) == OP_RET) {
+	    fprintf(f, "%s.%s %s",
+		    asm_opname(pc->op),
+		    asm_typename(pc->type),
+		    asm_regname(pc->op,pc->rd));
+	}
+	else {    
+	    fprintf(f, "%s.%s, %s, %s",
+		    asm_opname(pc->op),
+		    asm_typename(pc->type),
+		    asm_regname(pc->op,pc->rd),
+		    asm_regname(pc->op,pc->ri));
+	}
+    }
+}
+
+void print_code(FILE* f, instr_t* code, size_t len)
+{
+    int i;
+
+    for (i = 0; i < (int)len; i++) {
+	print_instr(f, &code[i]);
+	fprintf(f, "\n");
+    }
+}
+
 void set_vuint8(vuint8_t &r, int i, uint8_t v) { r[i] = v; }
 void set_vuint16(vuint16_t &r, int i, uint16_t v) { r[i] = v; }
 void set_vuint32(vuint32_t &r, int i, uint32_t v) { r[i] = v; }

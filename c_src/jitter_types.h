@@ -296,7 +296,7 @@ typedef union {
     int16_t   i16;
     int32_t   i32;
     int64_t   i64;
-    float8_t  f8;    
+    float8_t  f8;
     float16_t f16;
     float32_t f32;
     float64_t f64;
@@ -365,6 +365,16 @@ typedef union {
     vfloat32_t    vf32;
     vfloat64_t    vf64;
 } vscalar_t;
+
+#define NUM_VECTOR_REGISTERS  16
+#define NUM_FLOAT_REGISTERS   16
+#define NUM_SCALAR_REGISTERS  16
+
+typedef struct
+{
+    vscalar0_t v[NUM_VECTOR_REGISTERS];
+    scalar0_t  r[NUM_SCALAR_REGISTERS];    
+} vregfile_t;
 
 typedef void (*unary_op_t)(void* src, void* dst);
 typedef void (*binary_op_t)(void* src1, void* src2, void* dst);

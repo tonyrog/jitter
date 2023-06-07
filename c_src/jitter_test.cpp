@@ -13,7 +13,8 @@ using namespace asmjit;
 class MyErrorHandler : public ErrorHandler {
 public:
   void handleError(Error err, const char* message, BaseEmitter* origin) override {
-    printf("AsmJit error: %s\n", message);
+      (void) err; (void) origin;
+      printf("AsmJit error: %s\n", message);
   }
 };
 
@@ -22,12 +23,17 @@ extern void assemble(ZAssembler &a, const Environment &env,
 		     x86::Mem save_ptr,
 		     instr_t* code, size_t n);
 
-extern void emulate(scalar0_t r[16], vscalar0_t v[16], instr_t* code,
-		    size_t n, int* ret);
+extern void emulate(vregfile_t* rfp, instr_t* code, size_t n, int* ret);
 
 extern void sprint(FILE* f,uint8_t type, scalar0_t v);
 extern int  scmp(uint8_t type, scalar0_t v1, scalar0_t v2);
 extern void x86_info(void);
+
+extern const char* asm_opname(uint8_t op);
+extern const char* asm_typename(uint8_t type);
+extern void print_instr(FILE* f,instr_t* pc);
+extern void print_code(FILE* f, instr_t* code, size_t len);
+
 
 extern x86::Vec xreg(int i);
 extern x86::Vec yreg(int i);
@@ -64,177 +70,6 @@ static uint8_t int_type(uint8_t at)
 static uint8_t uint_type(uint8_t at)
 {
     return ((at & ~BASE_TYPE_MASK) | UINT);
-}
-
-static const char* asm_opname(uint8_t op)
-{
-    switch(op) {
-    case OP_NOP:   return "nop";
-    case OP_JMP:   return "jmp";
-    case OP_JNZ:   return "jnz";
-    case OP_JZ:    return "jz";		
-    case OP_RET:   return "ret";
-    case OP_NEG:   return "neg";
-    case OP_BNOT:  return "bnot";
-    case OP_INV:   return "inv";	
-
-    case OP_MOV:   return "mov";
-    case OP_MOVI:  return "movi";
-	
-    case OP_ADD:   return "add";
-    case OP_ADDI:  return "addi";
-    case OP_VADD:  return "vadd";	
-    case OP_VADDI:  return "vaddi";
-	
-    case OP_SUB:   return "sub";
-    case OP_SUBI:  return "subi";
-    case OP_VSUB:  return "vsub";	
-    case OP_VSUBI:  return "vsubi";
-
-    case OP_RSUB:   return "rsub";
-    case OP_RSUBI:  return "rsubi";
-    case OP_VRSUB:  return "vrsub";	
-    case OP_VRSUBI:  return "vrsubi";		
-
-    case OP_MUL:   return "mul";
-    case OP_MULI:  return "muli";
-    case OP_VMUL:  return "vmul";
-    case OP_VMULI:  return "vmuli";
-	
-    case OP_SLL:   return "sll";
-    case OP_SLLI:  return "slli";
-    case OP_VSLL:  return "vsll";	
-    case OP_VSLLI:  return "vslli";
-
-    case OP_SRL:   return "srl";	
-    case OP_SRLI:  return "srli";
-    case OP_VSRL:  return "vsrl";	
-    case OP_VSRLI:  return "vsrli";
-
-    case OP_SRA:   return "sra";
-    case OP_SRAI:  return "srai";
-    case OP_VSRA:   return "vsra";	
-    case OP_VSRAI:  return "vsrai";
-
-    case OP_BAND:  return "band";
-    case OP_BANDI:  return "bandi";	
-    case OP_VBAND:  return "vband";
-    case OP_VBANDI:  return "vbandi";
-	
-    case OP_BOR:   return "bor";
-    case OP_BORI:   return "bori";
-    case OP_VBOR:  return "vbor";
-    case OP_VBORI:  return "vbori";
-	
-    case OP_BXOR:  return "bxor";
-    case OP_BXORI:  return "bxori";	
-    case OP_VBXOR:  return "vbxor";
-    case OP_VBXORI:  return "vbxori";
-	
-    case OP_CMPLT: return "cmplt";
-    case OP_CMPLTI: return "cmplti";
-    case OP_VCMPLT:  return "vcmplt";
-    case OP_VCMPLTI:  return "vcmplti";
-	
-    case OP_CMPLE: return "cmple";
-    case OP_CMPLEI: return "cmplei";
-    case OP_VCMPLE:  return "vcmple";
-    case OP_VCMPLEI:  return "vcmplei";
-
-    case OP_CMPEQ: return "cmpeq";	
-    case OP_CMPEQI: return "cmpeqi";
-    case OP_VCMPEQ:  return "vcmpeq";
-    case OP_VCMPEQI:  return "vcmpeqi";
-
-    case OP_CMPGT: return "cmpgt";	
-    case OP_CMPGTI: return "cmpgti";
-    case OP_VCMPGT:  return "vcmpgt";
-    case OP_VCMPGTI:  return "vcmpgti";	
-	
-    case OP_CMPGE: return "cmpge";
-    case OP_CMPGEI: return "cmpgei";
-    case OP_VCMPGE:  return "vcmpge";
-    case OP_VCMPGEI:  return "vcmpgei";
-	
-    case OP_CMPNE: return "cmpne";
-    case OP_CMPNEI: return "cmpnei";	
-    case OP_VCMPNE:  return "vcmpne";
-    case OP_VCMPNEI:  return "vcmpnei";		
-
-    case OP_VRET:  return "vret";
-    case OP_VMOV:  return "vmov";
-    case OP_VMOVI:  return "vmovi";	
-    case OP_VNEG:  return "vneg";	
-    case OP_VBNOT:  return "vbnot";
-    case OP_VINV:  return "vinv";
-
-    default: return "?????";
-    }
-}
-
-static const char* asm_typename(uint8_t type)
-{
-    switch(type) {
-    case UINT8:  return "u8"; 
-    case UINT16: return "u16"; 
-    case UINT32: return "u32"; 
-    case UINT64: return "u64"; 
-    case INT8:   return "i8"; 
-    case INT16:  return "i16"; 
-    case INT32:  return "i32";  
-    case INT64:  return "i64";
-    case FLOAT8: return "f8"; 	
-    case FLOAT16: return "f16"; 
-    case FLOAT32: return "f32"; 
-    case FLOAT64: return "f64";
-    default: return "??";
-    }
-}
-
-static const char* asm_regname(uint8_t op, uint8_t r)
-{
-    if (op & OP_VEC) {
-	switch(r) {
-	case 0: return "v0";
-	case 1: return "v1";
-	case 2: return "v2";
-	case 3: return "v3";
-	case 4: return "v4";
-	case 5: return "v5";
-	case 6: return "v6";
-	case 7: return "v7";
-	case 8: return "v8";
-	case 9: return "v9";
-	case 10: return "v10";
-	case 11: return "v11";
-	case 12: return "v12";
-	case 13: return "v13";
-	case 14: return "v14";
-	case 15: return "v15";
-	default: return "v?";
-	}
-    }
-    else {
-	switch(r) {
-	case 0: return "r0";
-	case 1: return "r1";
-	case 2: return "r2";
-	case 3: return "r3";
-	case 4: return "r4";
-	case 5: return "r5";
-	case 6: return "r6";
-	case 7: return "r7";
-	case 8: return "r8";
-	case 9: return "r9";
-	case 10: return "r10";
-	case 11: return "r11";
-	case 12: return "r12";
-	case 13: return "r13";
-	case 14: return "r14";
-	case 15: return "r15";
-	default: return "r?";
-	}
-    }
 }
 
 // set all instructions to the same type!
@@ -318,7 +153,7 @@ int64_t value_i64_2[2] =
 
     
 int load_vreg(jitter_type_t type, int j, int jval,
-	      vector_t vreg[16], int r0, int r1, int r2)
+	      vector_t* vreg, int r0, int r1, int r2)
 {
     int i;    
     switch(type) {
@@ -444,78 +279,28 @@ int load_reg(jitter_type_t type, int i, int j, int jval,
     return 0;
 }
 
+unsigned vec_enable_mask =  0;
 
-void print_instr(FILE* f,instr_t* pc)
+void vec_enable(unsigned mask)
 {
-    if ((pc->op & OP_MASK) == OP_NOP) {
-	fprintf(f, "%s", asm_opname(OP_NOP));
-    }
-    else if ((pc->op & OP_MASK) == OP_RET) {
-	fprintf(f, "%s.%s %s",
-		asm_opname(pc->op),
-		asm_typename(pc->type),
-		asm_regname(pc->op,pc->rd));
-    }
-    else if (pc->op == OP_JMP) {
-	fprintf(f, "%s %d", asm_opname(pc->op), pc->imm12);
-    }
-    else if ((pc->op == OP_JNZ) || (pc->op == OP_JZ)) {
-	fprintf(f, "%s.%s %s, %d",
-		asm_opname(pc->op),
-		asm_typename(pc->type),
-		asm_regname(pc->op,pc->rd), pc->imm12);
-    }
-    else if (pc->op & OP_BIN) {
-	if (pc->op & OP_IMM) {
-	    fprintf(f, "%s.%s, %s, %s, %d",
-		    asm_opname(pc->op),
-		    asm_typename(pc->type),
-		    asm_regname(pc->op,pc->rd),
-		    asm_regname(pc->op,pc->ri),
-		    pc->imm8);
-	}
-	else {
-	    fprintf(f, "%s.%s, %s, %s, %s",
-		    asm_opname(pc->op),
-		    asm_typename(pc->type),
-		    asm_regname(pc->op,pc->rd),
-		    asm_regname(pc->op,pc->ri),
-		    asm_regname(pc->op,pc->rj));
-	}
-    }
-    else if ((pc->op == OP_MOVI)||(pc->op == OP_VMOVI)) {
-	fprintf(f, "%s.%s %s, %d",
-		asm_opname(pc->op),
-		asm_typename(pc->type),
-		asm_regname(pc->op,pc->rd), pc->imm12);
-    }
-    else {
-	if (pc->op & OP_IMM) {
-	    fprintf(f, "%s.%s, %s, %d",
-		    asm_opname(pc->op),
-		    asm_typename(pc->type),
-		    asm_regname(pc->op,pc->rd),
-		    pc->imm8);
-	}
-	else {
-	    fprintf(f, "%s.%s, %s, %s",
-		    asm_opname(pc->op),
-		    asm_typename(pc->type),
-		    asm_regname(pc->op,pc->rd),
-		    asm_regname(pc->op,pc->ri));
-	}
-    }
+    vec_enable_mask = mask;
 }
 
-void print_code(FILE* f, instr_t* code, size_t len)
+void vec_setup(ZAssembler& a)
 {
-    int i;
-
-    for (i = 0; i < (int)len; i++) {
-	print_instr(f, &code[i]);
-	fprintf(f, "\n");
-    }
+    a.disable_vec();
+    if (vec_enable_mask & VEC_TYPE_MMX) a.enable(VEC_TYPE_MMX);
+    if (vec_enable_mask & VEC_TYPE_SSE) a.enable(VEC_TYPE_SSE);
+    if (vec_enable_mask & VEC_TYPE_SSE2)
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2);
+    if (vec_enable_mask & VEC_TYPE_SSE3)
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3);
+    if (vec_enable_mask & VEC_TYPE_SSE4_1)
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3|VEC_TYPE_SSE4_1);
+    if (vec_enable_mask & VEC_TYPE_AVX) a.enable(VEC_TYPE_AVX);
+    if (vec_enable_mask & VEC_TYPE_AVX2) a.enable(VEC_TYPE_AVX|VEC_TYPE_AVX2);
 }
+		 
 
 
 static int verbose = 1;
@@ -540,15 +325,13 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
     code.setErrorHandler(&myErrorHandler);
     
     ZAssembler a(&code, 1024);
+    vec_setup(a);
 
-    scalar0_t  rr[16], rr_save[16];  // regular registers
-    vscalar0_t vr[16], vr_save[16];  // vector registers
+    vregfile_t rf, rf_save;
+    memset(&rf, 0, sizeof(rf));
 
-    memset(rr, 0, sizeof(rr));
-    memset(vr, 0, sizeof(vr));
-
-    load_reg(itype, i, icode->rj, jval, rr, 0, 1, 2);
-    load_vreg(itype, icode->rj, jval, (vector_t*)vr, 0, 1, 2);    
+    load_reg(itype, i, icode->rj, jval, rf.r, 0, 1, 2);
+    load_vreg(itype, icode->rj, jval, (vector_t*)rf.v, 0, 1, 2);    
 
     if (verbose) {
 	fprintf(stderr, "TEST ");
@@ -556,10 +339,15 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 	print_instr(stderr, icode);
 	if (jval >= 0) fprintf(stderr, " jval=%d", jval);
 
-	fprintf(stderr, "\nreg_data.r0 = "); sprint(stderr, itype, rr[0]);
-	fprintf(stderr, "\nreg_data.r1 = "); sprint(stderr, itype, rr[1]);
-	fprintf(stderr, "\nreg_data.r2 = "); sprint(stderr, itype, rr[2]);
-	fprintf(stderr,"\n");		
+	if (debug) {	
+	    fprintf(stderr, "\nreg_data.r0 = ");
+	    sprint(stderr, itype, rf.r[0]);
+	    fprintf(stderr, "\nreg_data.r1 = ");
+	    sprint(stderr, itype, rf.r[1]);
+	    fprintf(stderr, "\nreg_data.r2 = ");
+	    sprint(stderr, itype, rf.r[2]);
+	    fprintf(stderr,"\n");
+	}
     }
 
     if (debug) {
@@ -568,21 +356,13 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 
     // register must be passed in order! xmm 0...15 gp 0...15
     uint32_t reg_mask = (1 << 16) | (1 << 17) | (1 << 18);
-    struct {
-	scalar0_t r0;
-	scalar0_t r1;
-	scalar0_t r2;
-    } reg_data;
-
 
     set_type(itype, icode, code_len);
 
     save_label = a.newLabel();
 
-    a.disable_avx();
-    
     assemble(a, rt.environment(),
-	     reg_mask,  // r8,r9,r10
+	     reg_mask,
 	     x86::ptr(save_label),
 	     icode, code_len);
 
@@ -599,22 +379,16 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
     
 
     scalar0_t rexe, remu;
-    memcpy(rr_save, rr, sizeof(rr));
-    memcpy(vr_save, vr, sizeof(vr));
+    memcpy(&rf_save, &rf, sizeof(rf));
 
-    emulate(rr, vr, icode, code_len, &i);
-    memcpy(&remu, &rr[i], sizeof(scalar0_t));
+    emulate(&rf, icode, code_len, &i);
+    memcpy(&remu, &rf.r[i], sizeof(rf.r[i]));
 
     // restore state!
-    memcpy(rr, rr_save, sizeof(rr));
-    memcpy(vr, vr_save, sizeof(vr));
-
-    reg_data.r0 = rr[0];
-    reg_data.r1 = rr[1];    
-    reg_data.r2 = rr[2];
-
-    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&reg_data);
-    memcpy(&rexe, &reg_data.r2, sizeof(scalar0_t));
+    memcpy(&rf, &rf_save, sizeof(rf));
+    
+    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&rf);
+    memcpy(&rexe, &rf.r[2], sizeof(rf.r[2]));
 
     // print some xmm register direcly from fxsave64 output
     res = scmp(otype, remu, rexe);
@@ -636,25 +410,30 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 	    fprintf(stderr, " FAIL\n");
 	if (debug_on_fail) {
 	    print_code(stderr, icode, code_len);
-	    fprintf(stderr, "r0 = "); sprint(stderr,itype, rr[0]); fprintf(stderr,"\n");
-	    fprintf(stderr,"r1 = "); sprint(stderr,itype, rr[1]); fprintf(stderr,"\n");
-	    fprintf(stderr,"r2 = "); sprint(stderr,itype, rr[2]); fprintf(stderr,"\n");
-	    fprintf(stderr, "emu:r = "); sprint(stderr,otype,remu); fprintf(stderr,"\n");
-	    fprintf(stderr, "exe:r = "); sprint(stderr, otype, rexe); fprintf(stderr, "\n");
+	    fprintf(stderr, "r0 = ");
+	    sprint(stderr,itype, rf.r[0]); fprintf(stderr,"\n");
+	    fprintf(stderr,"r1 = ");
+	    sprint(stderr,itype, rf.r[1]); fprintf(stderr,"\n");
+	    fprintf(stderr,"r2 = ");
+	    sprint(stderr,itype, rf.r[2]); fprintf(stderr,"\n");
+	    fprintf(stderr, "emu:r = ");
+	    sprint(stderr,otype,remu); fprintf(stderr,"\n");
+	    fprintf(stderr, "exe:r = ");
+	    sprint(stderr, otype, rexe); fprintf(stderr, "\n");
 	    // reassemble with logging
 	    CodeHolder code1;
 
 	    code1.init(rt.environment(), rt.cpuFeatures());
 	    code1.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);	    
 	    ZAssembler b(&code1,1024);
+	    vec_setup(b);
 	    
 	    b.setLogger(&logger);
 
 	    save_label = b.newLabel();
 
-	    b.disable_avx();
 	    assemble(b, rt.environment(),
-		     reg_mask,  // r8,r9,r10
+		     reg_mask,
 		     x86::ptr(save_label),
 		     icode, code_len);
 	    b.section(xmm_data);
@@ -668,11 +447,16 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
     else {
 	if (debug) {
 	    print_code(stderr, icode, code_len);
-	    fprintf(stderr, "r0 = "); sprint(stderr,itype, rr[0]); fprintf(stderr,"\n");
-	    fprintf(stderr,"r1 = "); sprint(stderr,itype, rr[1]); fprintf(stderr,"\n");
-	    fprintf(stderr,"r2 = "); sprint(stderr,itype, rr[2]); fprintf(stderr,"\n");
-	    fprintf(stderr, "emu:r = "); sprint(stderr,otype,remu); fprintf(stderr,"\n");
-	    fprintf(stderr, "exe:r = "); sprint(stderr, otype, rexe); fprintf(stderr, "\n");	    
+	    fprintf(stderr, "r0 = ");
+	    sprint(stderr,itype, rf.r[0]); fprintf(stderr,"\n");
+	    fprintf(stderr,"r1 = ");
+	    sprint(stderr,itype, rf.r[1]); fprintf(stderr,"\n");
+	    fprintf(stderr,"r2 = ");
+	    sprint(stderr,itype, rf.r[2]); fprintf(stderr,"\n");
+	    fprintf(stderr, "emu:r = ");
+	    sprint(stderr,otype,remu); fprintf(stderr,"\n");
+	    fprintf(stderr, "exe:r = ");
+	    sprint(stderr, otype, rexe); fprintf(stderr, "\n");	    
 	}
 	if (verbose) fprintf(stderr, " OK\n");
     }
@@ -702,12 +486,6 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
     Section* xmm_data;
     // register must be passed in order! xmm 0...15 gp 0...15
     uint32_t reg_mask;
-    struct {
-	vscalar0_t v0;
-	vscalar0_t v1;
-	vscalar0_t v2;	
-	scalar0_t  r0;
-    } reg_data;
 
     if (jval >= 0)
 	reg_mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << (16+icode->rj));
@@ -720,6 +498,7 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
     code.setErrorHandler(&myErrorHandler);
     
     ZAssembler a(&code, 1024);  // Create and attach x86::Assembler to `code`
+    vec_setup(a);
 
     if (verbose) {
 	fprintf(stderr, "TEST ");
@@ -735,9 +514,8 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 
     save_label = a.newLabel();
 
-    a.disable_avx();
     assemble(a, rt.environment(),
-	     reg_mask,  // xmm0,xmm1,xmm2
+	     reg_mask,
 	     x86::ptr(save_label),
 	     icode, code_len);
     a.section(xmm_data);
@@ -751,48 +529,36 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 	return -1;               // Handle a possible error case.
     }
 
-    // fprintf(stderr, "code is added %p\n", fn);
+    vregfile_t rf, rf_save;
+    memset(&rf, 0, sizeof(rf));
 
-    scalar0_t  rr[16], rr_save[16];  // regular registers
-    vscalar0_t vr[16], vr_save[16];  // vector registers
-
-    memset(rr, 0, sizeof(rr));
-    memset(vr, 0, sizeof(vr));
-
-    load_reg(itype, 0, icode->rj, jval, rr, 0, 1, 2);
-    load_vreg(itype, icode->rj, jval, (vector_t*)vr, 0, 1, 2);
+    load_reg(itype, 0, icode->rj, jval, rf.r, 0, 1, 2);
+    load_vreg(itype, icode->rj, jval, (vector_t*)rf.v, 0, 1, 2);
 
     vector_t rexe, remu;
 
     // save for emu run
-    memcpy(rr_save, rr, sizeof(rr));
-    memcpy(vr_save, vr, sizeof(vr));
+    memcpy(&rf_save, &rf, sizeof(rf));
     
-    emulate(rr, vr, icode, code_len, &i);  // i is the register returned
-    memcpy(&remu, &vr[i], sizeof(vector_t));   // save result
+    emulate(&rf, icode, code_len, &i);  // i is the register returned
+    memcpy(&remu, &rf.v[i], sizeof(vector_t));   // save result
 
-    
-    // fprintf(stderr, "\ncalling fn\n");
-    // restore state!
-    memcpy(rr, rr_save, sizeof(rr));
-    memcpy(vr, vr_save, sizeof(vr));
-
-    reg_data.v0 = vr[0];
-    reg_data.v1 = vr[1];
-    reg_data.v2 = vr[2];
-    reg_data.r0 = rr[icode->rj];
+    memcpy(&rf, &rf_save, sizeof(rf));   // restore state
 
     if (debug) {
-	fprintf(stderr, "\nreg_data.v0 = "); vprint(stderr, itype, reg_data.v0.v);
-	fprintf(stderr, "\nreg_data.v1 = "); vprint(stderr, itype, reg_data.v1.v);
-	fprintf(stderr, "\nreg_data.v2 = "); vprint(stderr, itype, reg_data.v2.v);
-	fprintf(stderr, "\nreg_data.r%d = ", icode->rj); sprint(stderr, itype, reg_data.r0);
+	fprintf(stderr, "\nreg_data.v0 = ");
+	vprint(stderr, itype, rf.v[0].v);
+	fprintf(stderr, "\nreg_data.v1 = ");
+	vprint(stderr, itype, rf.v[1].v);
+	fprintf(stderr, "\nreg_data.v2 = ");
+	vprint(stderr, itype, rf.v[2].v);
+	fprintf(stderr, "\nreg_data.r%d = ", icode->rj);
+	sprint(stderr, itype, rf.r[icode->rj]);
 	fprintf(stderr,"\n");
     }
 
-    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&reg_data);
-
-    memcpy(&rexe, &reg_data.v2, sizeof(vector_t));
+    fxsave64_1_t* xmm_save = (fxsave64_1_t*) fn(&rf);
+    memcpy(&rexe, &rf.v[2].v, sizeof(vector_t));
 
     // compare output from emu and exe
     res = vcmp(otype, remu, rexe);
@@ -824,10 +590,14 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 	    print_code(stderr, icode, code_len);
 	    // itype = uint_type(itype);
 
-	    fprintf(stderr, "\nreg_data.v0 = "); vprint(stderr, itype, reg_data.v0.v);
-	    fprintf(stderr, "\nreg_data.v1 = "); vprint(stderr, itype, reg_data.v1.v);
-	    fprintf(stderr, "\nreg_data.v2 = "); vprint(stderr, itype, reg_data.v2.v);
-	    fprintf(stderr, "\nreg_data.r%d = ", icode->rj); sprint(stderr, itype, reg_data.r0);    
+	    fprintf(stderr, "\nreg_data.v0 = ");
+	    vprint(stderr, itype, rf.v[0].v);
+	    fprintf(stderr, "\nreg_data.v1 = ");
+	    vprint(stderr, itype, rf.v[1].v);
+	    fprintf(stderr, "\nreg_data.v2 = ");
+	    vprint(stderr, itype, rf.v[2].v);
+	    fprintf(stderr, "\nreg_data.r%d = ", icode->rj);
+	    sprint(stderr, itype, rf.r[icode->rj]);
 
 	    fprintf(stderr,"\nexe:r = "); vprint(stderr,otype, rexe);
 	    fprintf(stderr,"\nemu:r = "); vprint(stderr,otype, remu);
@@ -840,13 +610,14 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
 	    code1.newSection(&xmm_data, ".data", 5, SectionFlags::kNone, 128);
 	    
 	    ZAssembler b(&code1, 1024);
+	    vec_setup(b);
+
 	    b.setLogger(&logger);
 
 	    save_label = b.newLabel();
 
-	    b.disable_avx();
 	    assemble(b, rt.environment(),
-		     reg_mask,  // xmm0,xmm1,xmm2
+		     reg_mask,
 		     x86::ptr(save_label),
 		     icode, code_len);
 	    b.section(xmm_data);
@@ -860,11 +631,16 @@ int test_vcode(jitter_type_t itype, jitter_type_t otype, int jval,
     else {
 	if (debug) {
 	    print_code(stderr, icode, code_len);
-	    fprintf(stderr, "v0 = "); vprint(stderr, itype, vr[0].v); fprintf(stderr,"\n");
-	    fprintf(stderr, "v1 = "); vprint(stderr, itype, vr[1].v); fprintf(stderr,"\n");
-	    fprintf(stderr, "v2 = "); vprint(stderr, itype, vr[2].v); fprintf(stderr,"\n");
-	    fprintf(stderr,"exe:r = "); vprint(stderr,otype, rexe); fprintf(stderr,"\n");
-	    fprintf(stderr,"emu:r = "); vprint(stderr,otype, remu); fprintf(stderr,"\n");
+	    fprintf(stderr, "v0 = ");
+	    vprint(stderr, itype, rf.v[0].v); fprintf(stderr,"\n");
+	    fprintf(stderr, "v1 = ");
+	    vprint(stderr, itype, rf.v[1].v); fprintf(stderr,"\n");
+	    fprintf(stderr, "v2 = ");
+	    vprint(stderr, itype, rf.v[2].v); fprintf(stderr,"\n");
+	    fprintf(stderr,"exe:r = ");
+	    vprint(stderr,otype, rexe); fprintf(stderr,"\n");
+	    fprintf(stderr,"emu:r = ");
+	    vprint(stderr,otype, remu); fprintf(stderr,"\n");
 	}
 	if (verbose) printf(" OK\n");
     }
@@ -1070,6 +846,89 @@ int test_bshift(uint8_t op, uint8_t* ts, uint8_t otype)
     return failed;
 }
 
+void format_reg(String& sb, x86::Reg reg)
+{
+    sb.reset();
+    Formatter::formatOperand(sb, FormatFlags::kNone, NULL, Arch::kX64, reg);
+}
+
+void test_alloc()
+{
+    JitRuntime rt;
+    CodeHolder code;
+    int r;
+    int r1, r2, r3, r4;
+    int x1, x2, x3, x4;
+    String s;
+    
+    code.init(rt.environment(), rt.cpuFeatures());
+    ZAssembler a(&code, 1024);
+
+    r = -1;
+    while((r = a.reg_next(r)) >= 0) {
+	format_reg(s, reg(r));
+	printf("Free: %s\n", s.data());
+    }
+    r = -1;
+    while((r = a.xreg_next(r)) >= 0) {
+	format_reg(s, xreg(r));
+	printf("Free: %s\n", s.data());
+    }
+
+    r1 = a.reg_alloc();
+    format_reg(s, reg(r1));
+    printf("Alloc [%d] %s\n", r1, s.data());
+    
+    r2 = a.reg_alloc();
+    format_reg(s, reg(r2));
+    printf("Alloc [%d] %s\n", r2, s.data());
+
+    r3 = a.reg_alloc();
+    format_reg(s, reg(r3));
+    printf("Alloc [%d] %s\n", r3, s.data());
+
+    r4 = a.reg_alloc();
+    format_reg(s, reg(r4));
+    printf("alloc [%d] %s\n", r4, s.data());
+
+    a.reg_release(r1);
+    a.reg_release(r2);
+    a.reg_release(r3);
+    a.reg_release(r4);
+
+    x1 = a.xreg_alloc();
+    format_reg(s, xreg(x1));
+    printf("Alloc [%d] %s\n", x1, s.data());
+    
+    x2 = a.xreg_alloc();
+    format_reg(s, xreg(x2));
+    printf("Alloc [%d] %s\n", x2, s.data());
+
+    x3 = a.xreg_alloc();
+    format_reg(s, xreg(x3));
+    printf("Alloc [%d] %s\n", x3, s.data());
+
+    x4 = a.xreg_alloc();
+    format_reg(s, xreg(x4));
+    printf("Alloc [%d] %s\n", x4, s.data());
+
+    a.xreg_release(x1);
+    a.xreg_release(x2);
+    a.xreg_release(x3);
+    a.xreg_release(x4);
+
+    r = -1;
+    while((r = a.reg_next(r)) >= 0) {
+	format_reg(s, reg(r));
+	printf("Free: %s\n", s.data());
+    }
+    r = -1;
+    while((r = a.xreg_next(r)) >= 0) {
+	format_reg(s, xreg(r));
+	printf("Free: %s\n", s.data());
+    }
+    
+}
 
 int main()
 {
@@ -1081,8 +940,14 @@ int main()
 
     x86_info();
 
+//    test_alloc();
+//    exit(0);
+
+    vec_enable(VEC_TYPE_SSE|VEC_TYPE_SSE2);
+    // vec_enable(VEC_TYPE_AVX);
+
     int failed = 0;  // number of failed cases
-    
+/*    
     instr_t code_sum[] = {
 	OPimm12d(OP_MOVI, 0, 0),     // SUM=0 // OPdij(OP_BXOR, 0, 0, 0),
 	OPimm12d(OP_MOVI, 1, 13),    // I=13  OPdij(OP_BXOR, 0, 0, 0),
@@ -1091,7 +956,7 @@ int main()
 	OPimm12d(OP_JNZ, 1, -3),
 	OPd(OP_RET, 0)
     };
-    
+*/  
     uint8_t int_types[] =
 	{ UINT8, UINT16, UINT32, UINT64, INT8, INT16, INT32, INT64, VOID };
 //    uint8_t float_types[] =
@@ -1101,23 +966,21 @@ int main()
 	  //FLOAT16
 	  FLOAT32, FLOAT64, VOID };
     
-    uint8_t int_type[] = { INT8, VOID };
+//    uint8_t int_type[] = { INT8, VOID };
 
-//     debug = 1;
-      exit_on_fail = 1;
-      debug_on_fail = 1;
+//    debug = 1;
+    exit_on_fail = 1;
+    debug_on_fail = 1;
 //    instr_t code1[] = { OPdij(OP_CMPLT,2,0,2), OPd(OP_RET, 2) };
 //    code1[0].type = UINT64;
 //    code1[1].type = UINT64;
 //    test_code(UINT64, INT64, code1, 2);    
 //    exit(0);
 //////////////////
-
-    failed += test_imm8(OP_VCMPLEI, all_types, INT);    
-
+    //failed += test_bshift(OP_SLL, int_types, INT);    
 //////////////////     
-
-
+    // exit(0);
+    
     failed += test_unary(OP_NOP, int_types, VOID); 
     failed += test_imm12(OP_MOVI, int_types, INT);
     failed += test_unary(OP_MOV, int_types, VOID); // fixme: float registers!

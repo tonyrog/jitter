@@ -10,7 +10,7 @@ CFLAGS=$(DEPFLAGS) -I$(ERL_TOP)/usr/include
 CXX=g++
 
 APP=matrix
-CFLAGS+= -Wall -Wextra -Wswitch-enum -Wswitch-default -fno-common -O2 # --std=gnu11
+CFLAGS+= -Wall -Wextra -Wswitch-enum -Wswitch-default -fno-common -g # -O2
 CFLAGS+= -msse3 # -mavx2  # -msse3
 # raspberry pi
 # CFLAGS+=-mfloat-abi=softfp -mfpu=neon -flax-vector-conversions
@@ -25,10 +25,16 @@ OBJS = jitter_x86.o jitter_emu.o jitter_util.o \
 	jitter_test.o
 LIBS = -lasmjit
 
-all: jitter_test
+all: jas jitter_test
+
+jas:	jas.o
+	$(CC) jas.o -g -o$@
 
 jitter_test:	$(OBJS)
-	$(CXX) $(OBJS) $(LIBS) -g -o $ $@
+	$(CXX) $(OBJS) $(LIBS) -g -o$@
+
+jreg:	jreg.o
+	$(CXX) jreg.o $(LIBS) -g -o$@
 
 #jitter_test.o:	jitter.h jitter_types.h jitter_asm.h
 #jitter_util.o:   jitter.h jitter_types.h
@@ -36,10 +42,10 @@ jitter_test:	$(OBJS)
 #jitter_x86.o:	jitter.h jitter_types.h jitter_asm.h
 
 %.o:	%.c
-	$(CC) $(CFLAGS) -c -fPIC $<
+	$(CC) $(CFLAGS) -c $<
 
 %.o:	%.cpp
-	$(CXX) $(CXXFLAGS) -c -fPIC $<
+	$(CXX) $(CXXFLAGS) -c $<
 
 .%.d:	;
 
