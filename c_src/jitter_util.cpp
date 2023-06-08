@@ -57,6 +57,11 @@ const char* asm_opname(uint8_t op)
     case OP_BANDI:  return "bandi";	
     case OP_VBAND:  return "vband";
     case OP_VBANDI:  return "vbandi";
+
+    case OP_BANDN:  return "bandn";
+    case OP_BANDNI:  return "bandni";	
+    case OP_VBANDN:  return "vbandn";
+    case OP_VBANDNI:  return "vbandni";
 	
     case OP_BOR:   return "bor";
     case OP_BORI:   return "bori";
@@ -372,26 +377,26 @@ float64_t get_elemen_float64(jitter_type_t type, vector_t r, int i)
 
 void print_vuint8(FILE* f,vuint8_t r)
 {
-    fprintf(f,"{%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x,%x}",
+    fprintf(f,"{0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x}",
 	   r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7],
 	   r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15]);
 }
 
 void print_vuint16(FILE* f,vuint16_t r)
 {
-    fprintf(f,"{%x,%x,%x,%x,%x,%x,%x,%x}",
+    fprintf(f,"{0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x}",
 	   r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
 }
 
 void print_vuint32(FILE* f,vuint32_t r)
 {
-    fprintf(f,"{%x,%x,%x,%x}",
+    fprintf(f,"{0x%x,0x%x,0x%x,0x%x}",
 	   r[0], r[1], r[2], r[3]);
 }
 
 void print_vuint64(FILE* f,vuint64_t r)
 {
-    fprintf(f,"{%lx,%lx}",
+    fprintf(f,"{0x%lx,0x%lx}",
 	   r[0], r[1]);
 }
 
@@ -452,10 +457,10 @@ void vprint(FILE* f, uint8_t type, vector_t v)
 void sprint(FILE* f, uint8_t type, scalar0_t v)
 {
     switch(type) {
-    case UINT8: fprintf(f, "%x", v.u8); break;
-    case UINT16: fprintf(f, "%x", v.u16); break;
-    case UINT32: fprintf(f, "%x", v.u32); break;
-    case UINT64: fprintf(f, "%lx", v.u64); break;
+    case UINT8: fprintf(f, "0x%02x", v.u8); break;
+    case UINT16: fprintf(f, "0x%04x", v.u16); break;
+    case UINT32: fprintf(f, "0x%08x", v.u32); break;
+    case UINT64: fprintf(f, "0x%016lx", v.u64); break;
     case INT8: fprintf(f, "%d", v.i8); break;
     case INT16: fprintf(f, "%d", v.i16); break;
     case INT32: fprintf(f, "%d", v.i32); break;

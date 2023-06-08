@@ -67,7 +67,7 @@
 #define    OP_JNZ  (7|OP_IMM)  // imm12 (relative)
 #define    OP_JZ   (8|OP_IMM)  // imm12 (relative)
 
-// Add
+// Add 
 #define    OP_ADD   (OP_BIN|1)
 #define    OP_ADDI  (OP_ADD|OP_IMM)
 #define    OP_VADD  (OP_ADD|OP_VEC)
@@ -103,49 +103,54 @@
 #define    OP_BANDI  (OP_BAND|OP_IMM)
 #define    OP_VBAND (OP_BAND|OP_VEC)
 #define    OP_VBANDI (OP_VBAND|OP_IMM)
+// Bitwise And Not
+#define    OP_BANDN  (OP_BIN|8)
+#define    OP_BANDNI  (OP_BANDN|OP_IMM)
+#define    OP_VBANDN (OP_BANDN|OP_VEC)
+#define    OP_VBANDNI (OP_VBANDN|OP_IMM)
 // Bitwise Or
-#define    OP_BOR   (OP_BIN|8)   
+#define    OP_BOR   (OP_BIN|9)   
 #define    OP_BORI   (OP_BOR|OP_IMM)
 #define    OP_VBOR  (OP_BOR|OP_VEC)
 #define    OP_VBORI  (OP_VBOR|OP_IMM)
-// Bitwise Xor
-#define    OP_BXOR  (OP_BIN|9)   
+// Bitwise Exclusive Or
+#define    OP_BXOR  (OP_BIN|10)   
 #define    OP_BXORI  (OP_BXOR|OP_IMM)
 #define    OP_VBXOR (OP_BXOR|OP_VEC)
 #define    OP_VBXORI (OP_VBXOR|OP_IMM)
 // Compare Less Than
-#define    OP_CMPLT (OP_BIN|10)
+#define    OP_CMPLT (OP_BIN|11)
 #define    OP_CMPLTI (OP_CMPLT|OP_IMM)
 #define    OP_VCMPLT (OP_CMPLT|OP_VEC)
 #define    OP_VCMPLTI (OP_VCMPLT|OP_IMM)
 // Compare Less than or Equal
-#define    OP_CMPLE (OP_BIN|11)
+#define    OP_CMPLE (OP_BIN|12)
 #define    OP_CMPLEI (OP_CMPLE|OP_IMM)
 #define    OP_VCMPLE (OP_CMPLE|OP_VEC)
 #define    OP_VCMPLEI (OP_VCMPLE|OP_IMM)
 // Compare Equal
-#define    OP_CMPEQ (OP_BIN|12)
+#define    OP_CMPEQ (OP_BIN|13)
 #define    OP_CMPEQI (OP_CMPEQ|OP_IMM)
 #define    OP_VCMPEQ (OP_CMPEQ|OP_VEC)
 #define    OP_VCMPEQI (OP_VCMPEQ|OP_IMM)
 // Compare Greater Than
-#define    OP_CMPGT (OP_BIN|13)
+#define    OP_CMPGT (OP_BIN|14)
 #define    OP_CMPGTI (OP_CMPGT|OP_IMM)
 #define    OP_VCMPGT (OP_CMPGT|OP_VEC)
 #define    OP_VCMPGTI (OP_VCMPGT|OP_IMM)
 // Compare Greater then or Equal
-#define    OP_CMPGE (OP_BIN|14)
+#define    OP_CMPGE (OP_BIN|15)
 #define    OP_CMPGEI (OP_CMPGE|OP_IMM)
 #define    OP_VCMPGE (OP_CMPGE|OP_VEC)
 #define    OP_VCMPGEI (OP_VCMPGE|OP_IMM)
 // Compare Not Equal
-#define    OP_CMPNE (OP_BIN|15)
+#define    OP_CMPNE (OP_BIN|16)
 #define    OP_CMPNEI (OP_CMPNE|OP_IMM)
 #define    OP_VCMPNE (OP_CMPNE|OP_VEC)
 #define    OP_VCMPNEI (OP_VCMPNE|OP_IMM)
 
 // Reverse Subtract
-#define    OP_RSUB   (OP_BIN|16)
+#define    OP_RSUB   (OP_BIN|17)
 #define    OP_RSUBI  (OP_RSUB|OP_IMM)
 #define    OP_VRSUB  (OP_RSUB|OP_VEC)
 #define    OP_VRSUBI (OP_VRSUB|OP_IMM)

@@ -182,7 +182,6 @@ static void emit_movi(ZAssembler &a, uint8_t type, int dst, int16_t imm)
     }    
 }
 
-
 static void emit_slli(ZAssembler &a, uint8_t type, int dst, int src, int8_t imm)
 {
     if (src != dst)
@@ -302,18 +301,6 @@ static void emit_src(ZAssembler &a, int dst, int src)
     }
 }
 
-// dst = src (maybe)
-static void emit_vmov(ZAssembler &a, uint8_t type, int dst, int src)
-{
-    if (src != dst) {    
-	switch(type) {
-	case FLOAT32: a.movaps(xreg(dst), xreg(src)); break;
-	case FLOAT64: a.movapd(xreg(dst), xreg(src)); break;
-	default: a.movdqa(xreg(dst), xreg(src)); break;
-	}
-    }
-}
-
 // reduce two sources into one! operation does not depend on order!
 static int emit_one_src(ZAssembler &a, uint8_t type, int dst,
 			int src1, int src2)
@@ -327,6 +314,18 @@ static int emit_one_src(ZAssembler &a, uint8_t type, int dst,
     else {
 	emit_movr(a, type, dst, src1); // dst = src1;
 	return src2;
+    }
+}
+
+// dst = src (maybe)
+static void emit_vmov(ZAssembler &a, uint8_t type, int dst, int src)
+{
+    if (src != dst) {    
+	switch(type) {
+	case FLOAT32: a.movaps(xreg(dst), xreg(src)); break;
+	case FLOAT64: a.movapd(xreg(dst), xreg(src)); break;
+	default: a.movdqa(xreg(dst), xreg(src)); break;
+	}
     }
 }
 
@@ -768,26 +767,70 @@ static void emit_band(ZAssembler &a, uint8_t type,
 static void emit_bandi(ZAssembler &a, uint8_t type,
 		       int dst, int src, int8_t imm)
 {
-    if (dst != src)
-	emit_movi(a, type, dst, imm);
-    else {
-	x86::Gp t = alloc_gp(a);
-	emit_movi(a, type, regno(t), imm);
-	src = regno(t);
-    }
     switch(type) {
     case UINT8:	
-    case INT8:       a.and_(reg(dst).r8(), reg(src).r8()); break;
+    case INT8:
+	emit_src(a, dst, src);
+	a.and_(reg(dst).r8(), imm); break;
     case UINT16:	
-    case INT16:      a.and_(reg(dst).r16(), reg(src).r16()); break;
-    case UINT32:	
-    case INT32:      a.and_(reg(dst).r32(), reg(src).r32()); break;
-    case UINT64:	
-    case INT64:      a.and_(reg(dst).r64(), reg(src).r64()); break;
-    case FLOAT32:    a.andps(xreg(dst), xreg(src)); break;
-    case FLOAT64:    a.andpd(xreg(dst), xreg(src)); break;
+    case INT16:
+	emit_src(a, dst, src);
+	a.and_(reg(dst).r16(), imm); break;
+    case UINT32:
+    case INT32:
+	emit_src(a, dst, src);	
+	a.and_(reg(dst).r32(), imm); break;
+    case UINT64:
+    case INT64:
+	emit_src(a, dst, src);
+	a.and_(reg(dst).r64(), imm); break;
+    case FLOAT32: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);
+	a.andps(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }
+    case FLOAT64: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);	
+	a.andpd(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }
     default: crash(__FILE__, __LINE__, type); break;	
     }    
+}
+
+// dst = ~dst & dst    => dst = 0
+// dst = ~dst & src2   => dst = ~dst; dst &= src2
+// dst = ~src1 & dst   => dst &= ~src1
+// dst = ~src1 & src2  => dst &= ~src1; dst &= src1; 
+
+static void emit_bandn(ZAssembler &a, uint8_t type,
+		       int dst, int src1, int src2)
+{
+    if ((dst == src1) && (dst == src2)) { // dst = ~dst & dst
+	emit_zero(a, type, dst);
+    }
+    else {
+	x86::Gp t = alloc_gp(a);
+	emit_mov(a, type, regno(t), src1);        // t = src1
+	emit_bnot(a, type, regno(t), regno(t));  // t = ~src1
+	emit_band(a, type, dst, regno(t), src2);
+	release_gp(a, t);
+    }
+}
+
+// dst = ~src & imm
+static void emit_bandni(ZAssembler &a, uint8_t type,
+			int dst, int src, int8_t imm)
+{
+    x86::Gp t = alloc_gp(a);
+    emit_mov(a, type, regno(t), src);        // t = src
+    emit_bnot(a, type, regno(t), regno(t));   // t = ~src
+    emit_bandi(a, type, dst, regno(t), imm);
+    release_gp(a, t);
 }
 
 static void emit_bor(ZAssembler &a, uint8_t type,
@@ -814,24 +857,41 @@ static void emit_bor(ZAssembler &a, uint8_t type,
 static void emit_bori(ZAssembler &a, uint8_t type,
 		       int dst, int src, int8_t imm)
 {
-    if (dst != src)
-	emit_movi(a, type, dst, imm);
-    else {
-	x86::Gp t = alloc_gp(a);
-	emit_movi(a, type, regno(t), imm);
-	src = regno(t);
-    }
     switch(type) {
     case UINT8:	
-    case INT8:       a.or_(reg(dst).r8(), reg(src).r8()); break;
+    case INT8:
+	emit_src(a, dst, src);
+	a.or_(reg(dst).r8(), imm);
+	break;
     case UINT16:	
-    case INT16:      a.or_(reg(dst).r16(), reg(src).r16()); break;
+    case INT16:
+	emit_src(a, dst, src);
+	a.or_(reg(dst).r16(), imm);
+	break;
     case UINT32:	
-    case INT32:      a.or_(reg(dst).r32(), reg(dst).r32()); break;
+    case INT32:
+	emit_src(a, dst, src);
+	a.or_(reg(dst).r32(), imm);
+	break;
     case UINT64:	
-    case INT64:      a.or_(reg(dst).r64(), reg(dst).r64()); break;
-    case FLOAT32:    a.orps(xreg(dst), xreg(src)); break;
-    case FLOAT64:    a.orpd(xreg(dst), xreg(src)); break;
+    case INT64:
+	emit_src(a, dst, src);	
+	a.or_(reg(dst).r64(), imm);
+	break;
+    case FLOAT32: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);
+	a.orps(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }
+    case FLOAT64: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);	
+	a.orpd(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }	
     default: crash(__FILE__, __LINE__, type); break;	
     }    
 }
@@ -858,26 +918,43 @@ static void emit_bxor(ZAssembler &a, uint8_t type,
 static void emit_bxori(ZAssembler &a, uint8_t type,
 		       int dst, int src, int8_t imm)
 {
-    if (dst != src)
-	emit_movi(a, type, dst, imm);
-    else {
-	x86::Gp t = alloc_gp(a);
-	emit_movi(a, type, regno(t), imm);
-	src = regno(t);
-    }        
     switch(type) {
     case UINT8:	
-    case INT8:       a.xor_(reg(dst).r8(), reg(src).r8()); break;
+    case INT8:
+	emit_src(a, dst, src);		
+	a.xor_(reg(dst).r8(), imm);
+	break;
     case UINT16:	
-    case INT16:      a.xor_(reg(dst).r16(), reg(src).r16()); break;
-    case UINT32:	
-    case INT32:      a.xor_(reg(dst).r32(), reg(dst).r32()); break;
+    case INT16:
+	emit_src(a, dst, src);	
+	a.xor_(reg(dst).r16(), imm);
+	break;
+    case UINT32:
+    case INT32:
+	emit_src(a, dst, src);	
+	a.xor_(reg(dst).r32(), imm);
+	break;
     case UINT64:	
-    case INT64:      a.xor_(reg(dst).r64(), reg(dst).r64()); break;
-    case FLOAT32:    a.xorps(xreg(dst), xreg(src)); break;
-    case FLOAT64:    a.xorpd(xreg(dst), xreg(src)); break;
+    case INT64:
+	emit_src(a, dst, src);	
+	a.xor_(reg(dst).r64(), imm);
+	break;
+    case FLOAT32: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);
+	a.xorps(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }
+    case FLOAT64: {
+	x86::Xmm t1 = alloc_xmm(a);
+	emit_movi(a, uint_type(type), regno(t1), imm);	
+	a.xorpd(xreg(dst), t1);
+	release_xmm(a, t1);
+	break;
+    }	
     default: crash(__FILE__, __LINE__, type); break;	
-    }    
+    }
 }
 
 
@@ -1653,7 +1730,7 @@ static void emit_vsll_sse2(ZAssembler &a, uint8_t type,
 static void emit_vsll_avx(ZAssembler &a, uint8_t type,
 			  int dst, int src1, int src2)
 {
-    x86::Xmm t1 = alloc_xmm(a);    
+    x86::Xmm t1 = alloc_xmm(a);
     vzero_avx(a, t1);  // needed? only 64-bits used...
     a.movq(t1, reg(src2));
 
@@ -1694,14 +1771,13 @@ static void emit_vsll_avx(ZAssembler &a, uint8_t type,
 static void emit_vsll(ZAssembler &a, uint8_t type,
 		      int dst, int src1, int src2)
 {
-    if (a.use_avx()) 
+    if (a.use_avx())
 	emit_vsll_avx(a, type, dst, src1, src2);
     else if (a.use_sse2())
 	emit_vsll_sse2(a, type, dst, src1, src2);
     else
 	emit_sll(a, type, dst, src1, src2);
 }
-
 
 static void emit_vsrl(ZAssembler &a, uint8_t type,
 		      int dst, int src1, int src2)
@@ -1881,6 +1957,70 @@ static void emit_vbori(ZAssembler &a, uint8_t type,
 }
 
 
+static void emit_vbxor_sse2(ZAssembler &a, uint8_t type,
+		       int dst, int src1, int src2)
+{
+    (void) type;
+    int src = emit_one_vsrc(a, type, dst, src1, src2);        
+    switch(type) {
+    case FLOAT32:
+	a.xorps(DST, SRC);
+	break;
+    case FLOAT64:
+	a.xorpd(DST, SRC);
+	break;
+    default:
+	a.pxor(DST, SRC);
+	break;
+    }
+}
+
+static void emit_vbxor_avx(ZAssembler &a, uint8_t type,
+			  int dst, int src1, int src2)
+{
+    switch(type) {
+    case FLOAT32:
+	a.vxorps(DST, SRC1, SRC2);
+	break;	
+    case FLOAT64:
+	a.vxorpd(DST, SRC1, SRC2);
+	break;	
+    default:
+	a.vpxor(DST, SRC1, SRC2);
+	break;
+    }
+}
+
+static void emit_vbxor(ZAssembler &a, uint8_t type,
+		      int dst, int src1, int src2)
+{
+    if (a.use_avx())
+	emit_vbxor_avx(a, type, dst, src1, src2);
+    else if (a.use_sse2())
+	emit_vbxor_sse2(a, type, dst, src1, src2);
+    else
+	emit_bxor(a, type, dst, src1, src2);
+}
+
+static void emit_vbxori(ZAssembler &a, uint8_t type,
+			int dst, int src, int8_t imm)
+{
+    x86::Xmm t1 = alloc_xmm(a);    
+    emit_vmovi(a, uint_type(type), regno(t1), imm);
+    emit_vbxor(a, type, dst, src, regno(t1));
+    release_xmm(a, t1);
+}
+
+
+static void emit_vbnot(ZAssembler &a, uint8_t type, int dst, int src)
+{
+    x86::Xmm t1 = alloc_xmm(a);
+    emit_vmov(a, type, dst, src);  // dst = src
+    emit_vone(a, regno(t1));
+    emit_vbxor(a, type, dst, dst, regno(t1));
+    release_xmm(a, t1);
+}
+
 static void emit_vband_sse2(ZAssembler &a, uint8_t type,
 			   int dst, int src1, int src2)
 {
@@ -1934,66 +2074,23 @@ static void emit_vbandi(ZAssembler &a, uint8_t type,
     release_xmm(a, t1);
 }
 
-static void emit_vbxor_sse2(ZAssembler &a, uint8_t type,
-		       int dst, int src1, int src2)
-{
-    (void) type;
-    int src = emit_one_vsrc(a, type, dst, src1, src2);        
-    switch(type) {
-    case FLOAT32:
-	a.xorps(DST, SRC);
-	break;
-    case FLOAT64:
-	a.xorpd(DST, SRC);
-	break;
-    default:
-	a.pxor(DST, SRC);
-	break;
-    }
-}
-
-static void emit_vbxor_avx(ZAssembler &a, uint8_t type,
-			  int dst, int src1, int src2)
-{
-    switch(type) {
-    case FLOAT32:
-	a.vxorps(DST, SRC1, SRC2);
-	break;	
-    case FLOAT64:
-	a.vxorpd(DST, SRC1, SRC2);
-	break;	
-    default:
-	a.vpxor(DST, SRC1, SRC2);
-	break;
-    }
-}
-
-static void emit_vbxor(ZAssembler &a, uint8_t type,
-		      int dst, int src1, int src2)
-{
-    if (a.use_avx())
-	emit_vbxor_avx(a, type, dst, src1, src2);
-    else if (a.use_sse2())
-	emit_vbxor_sse2(a, type, dst, src1, src2);
-    else
-	emit_bxor(a, type, dst, src1, src2);
-}
-
-static void emit_vbxori(ZAssembler &a, uint8_t type,
-			int dst, int src, int8_t imm)
+// dst = ~src1 & src2
+static void emit_vbandn(ZAssembler &a, uint8_t type,
+			int dst, int src1, int src2)
 {
     x86::Xmm t1 = alloc_xmm(a);    
-    emit_vmovi(a, uint_type(type), regno(t1), imm);    
-    emit_vbxor(a, type, dst, src, regno(t1));
-    release_xmm(a, t1);
+    emit_vbnot(a, type, regno(t1), src1);
+    emit_vband(a, type, dst, regno(t1), src2);
+    release_xmm(a, t1);    
 }
 
-static void emit_vbnot(ZAssembler &a, uint8_t type, int dst, int src)
+// dst = ~src & imm
+static void emit_vbandni(ZAssembler &a, uint8_t type,
+			 int dst, int src, int8_t imm)
 {
-    x86::Xmm t1 = alloc_xmm(a);    
-    emit_vmov(a, type, dst, src);  // dst = src
-    emit_vone(a, regno(t1));
-    emit_vbxor(a, type, dst, dst, regno(t1));
+    x86::Xmm t1 = alloc_xmm(a);
+    emit_vmovi(a, uint_type(type), regno(t1), imm);
+    emit_vbandn(a, type, dst, src, regno(t1));
     release_xmm(a, t1);
 }
 
@@ -2102,7 +2199,7 @@ static void emit_vcmplt1(ZAssembler &a, uint8_t type,
 	x86::Xmm t1 = alloc_xmm(a);
 	emit_vmov(a, type, regno(t1), dst);
 	emit_vmov(a, type, dst, src);
-	a.pcmpgtq(DST, t1); // SSE4.2
+	a.pcmpgtq(DST, t1); // SSE4.2 (fixme!, implement when not sse4.2)
 	release_xmm(a, t1);
 	break;
     }
@@ -2320,8 +2417,7 @@ static void emit_vcmplei(ZAssembler &a, uint8_t type,
 }
 
 // Helper function to generate instructions based on type and operation
-void emit_instruction(ZAssembler &a, instr_t* p,
-		      uint32_t reg_mask, x86::Gp rfp)
+void emit_instruction(ZAssembler &a, instr_t* p, uint32_t reg_mask, x86::Gp rfp)
 {
     int i;
 
@@ -2393,7 +2489,12 @@ void emit_instruction(ZAssembler &a, instr_t* p,
     case OP_BAND: emit_band(a, p->type, p->rd, p->ri, p->rj); break;
     case OP_BANDI: emit_bandi(a, p->type, p->rd, p->ri, p->imm8); break;	
     case OP_VBAND: emit_vband(a, p->type, p->rd, p->ri, p->rj); break;
-    case OP_VBANDI: emit_vbandi(a, p->type, p->rd, p->ri, p->imm8); break;	
+    case OP_VBANDI: emit_vbandi(a, p->type, p->rd, p->ri, p->imm8); break;
+
+    case OP_BANDN: emit_bandn(a, p->type, p->rd, p->ri, p->rj); break;
+    case OP_BANDNI: emit_bandni(a, p->type, p->rd, p->ri, p->imm8); break;	
+    case OP_VBANDN: emit_vbandn(a, p->type, p->rd, p->ri, p->rj); break;
+    case OP_VBANDNI: emit_vbandni(a, p->type, p->rd, p->ri, p->imm8); break;	
 	
     case OP_BOR:  emit_bor(a, p->type, p->rd, p->ri, p->rj); break;
     case OP_BORI: emit_bori(a, p->type, p->rd, p->ri, p->imm8); break;		
@@ -2491,7 +2592,7 @@ void assemble(ZAssembler &a, const Environment &env,
 
     FuncArgsAssignment args(&func);   // Create arguments assignment context.
     args.assignAll(rfp);             // Assign our registers to arguments.
-    args.updateFuncFrame(frame);      // Reflect our args in FuncFrame.    
+    args.updateFuncFrame(frame);      // Reflect our args in FuncFrame.
     frame.finalize();                 // Finalize the FuncFrame (updates it).
 
     a.emitProlog(frame);              // Emit function prolog.

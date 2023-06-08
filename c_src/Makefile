@@ -11,13 +11,13 @@ CXX=g++
 
 APP=matrix
 CFLAGS+= -Wall -Wextra -Wswitch-enum -Wswitch-default -fno-common -g # -O2
-CFLAGS+= -msse3 # -mavx2  # -msse3
+CFLAGS+= -msse4.2 # -msse3
 # raspberry pi
 # CFLAGS+=-mfloat-abi=softfp -mfpu=neon -flax-vector-conversions
 # CFLAGS+=-mfpu=neon -flax-vector-conversions
 CXXFLAGS+= -Wall -Wextra -Wswitch-enum -Wswitch-default -fno-common -g #-O2
 CXXFLAGS+=$(DEPFLAGS)
-CXXFLAGS+= -msse3
+CXXFLAGS+= -msse4.2  # -msse3
 
 LDFLAGS+=-shared
 

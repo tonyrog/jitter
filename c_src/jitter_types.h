@@ -50,10 +50,10 @@ typedef uint16_t float16_t; // simulated
 #define VELEMS(t) 1
 #define ALIGN sizeof(void*)
 
-typedef uint8_t       vuint8_t;
-typedef uint16_t      vuint16_t;
-typedef uint32_t      vuint32_t;
-typedef uint64_t      vuint64_t;
+typedef uint8_t      vuint8_t;
+typedef uint16_t     vuint16_t;
+typedef uint32_t     vuint32_t;
+typedef uint64_t     vuint64_t;
 typedef int8_t       vint8_t;
 typedef int16_t      vint16_t;
 typedef int32_t      vint32_t;
@@ -64,19 +64,19 @@ typedef float16_t    vfloat16_t;
 typedef float32_t    vfloat32_t;
 typedef float64_t    vfloat64_t;
 
-#define vint8_t_const(a)       (a)
-#define vint16_t_const(a)      (a)
-#define vint32_t_const(a)      (a)
-#define vint64_t_const(a)      (a)
-#define vuint8_t_const(a)       (a)
-#define vuint16_t_const(a)      (a)
-#define vuint32_t_const(a)      (a)
-#define vuint64_t_const(a)      (a)
-#define vint128_t_const(a)     {(0),(a)}
-#define vfloat8_t_const(a)     (a)
-#define vfloat16_t_const(a)    (a)
-#define vfloat32_t_const(a)    (a)
-#define vfloat64_t_const(a)    (a)
+#define vint8_t_const(a)     (a)
+#define vint16_t_const(a)    (a)
+#define vint32_t_const(a)    (a)
+#define vint64_t_const(a)    (a)
+#define vuint8_t_const(a)    (a)
+#define vuint16_t_const(a)   (a)
+#define vuint32_t_const(a)   (a)
+#define vuint64_t_const(a)   (a)
+#define vint128_t_const(a)   {(0),(a)}
+#define vfloat8_t_const(a)   (a)
+#define vfloat16_t_const(a)  (a)
+#define vfloat32_t_const(a)  (a)
+#define vfloat64_t_const(a)  (a)
 
 #else
 #define USE_VECTOR 1
@@ -279,6 +279,13 @@ static inline jitter_type_t int_type(jitter_type_t type)
 }
 
 typedef vint8_t vector_t;
+// various x86 
+typedef uint8_t st_t[10];
+typedef uint8_t mm_t __attribute__ ((vector_size (8)));
+typedef uint8_t xmm_t __attribute__ ((vector_size (16)));
+typedef uint8_t ymm_t __attribute__ ((vector_size (32)));
+typedef uint8_t zmm_t __attribute__ ((vector_size (64)));
+typedef uint8_t data128_t[16];
 
 typedef uint32_t jitter_type_flags_t;
 
@@ -373,8 +380,9 @@ typedef union {
 typedef struct
 {
     vscalar0_t v[NUM_VECTOR_REGISTERS];
-    scalar0_t  r[NUM_SCALAR_REGISTERS];    
+    scalar0_t  r[NUM_SCALAR_REGISTERS];
 } vregfile_t;
+
 
 typedef void (*unary_op_t)(void* src, void* dst);
 typedef void (*binary_op_t)(void* src1, void* src2, void* dst);

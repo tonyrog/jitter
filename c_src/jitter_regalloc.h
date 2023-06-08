@@ -174,6 +174,7 @@ public:
     }
 };
 
+// fixme: make one for each type
 class TmpAlloc {
     int reg_;
     RegAlloc* alloc_;

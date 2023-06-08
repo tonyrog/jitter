@@ -34,11 +34,9 @@ extern const char* asm_typename(uint8_t type);
 extern void print_instr(FILE* f,instr_t* pc);
 extern void print_code(FILE* f, instr_t* code, size_t len);
 
-
 extern x86::Vec xreg(int i);
 extern x86::Vec yreg(int i);
 extern x86::Gp reg(int i);
-
 
 extern void vprint(FILE* f, uint8_t type, vector_t v);
 extern int  vcmp(uint8_t type, vector_t v1, vector_t v2);
@@ -295,14 +293,18 @@ void vec_setup(ZAssembler& a)
 	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2);
     if (vec_enable_mask & VEC_TYPE_SSE3)
 	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3);
+    if (vec_enable_mask & VEC_TYPE_SSSE3)
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3|VEC_TYPE_SSSE3);    
     if (vec_enable_mask & VEC_TYPE_SSE4_1)
-	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3|VEC_TYPE_SSE4_1);
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3|VEC_TYPE_SSSE3|
+		 VEC_TYPE_SSE4_1);
+    if (vec_enable_mask & VEC_TYPE_SSE4_2)
+	a.enable(VEC_TYPE_SSE|VEC_TYPE_SSE2|VEC_TYPE_SSE3|VEC_TYPE_SSSE3|
+		 VEC_TYPE_SSE4_1|VEC_TYPE_SSE4_2);
     if (vec_enable_mask & VEC_TYPE_AVX) a.enable(VEC_TYPE_AVX);
     if (vec_enable_mask & VEC_TYPE_AVX2) a.enable(VEC_TYPE_AVX|VEC_TYPE_AVX2);
 }
 		 
-
-
 static int verbose = 1;
 static int debug   = 0;
 static int exit_on_fail = 0;
@@ -397,7 +399,7 @@ int test_icode(jitter_type_t itype, jitter_type_t otype, int i, int jval,
 	    fprintf(stderr, "\nxmm_save=%p\n", xmm_save);
 	    for (i = 0; i < 16; i++) {
 		fprintf(stderr, "xmm%d = ", i);
-		vprint(stderr, itype, (vector_t)xmm_save->xmm[i]);
+		vprint(stderr, itype, (vector_t) xmm_save->xmm[i]);
 		fprintf(stderr,"\n");
 	    }
 	}
@@ -994,7 +996,8 @@ int main()
     failed += test_binary(OP_SUB, int_types, VOID);
     failed += test_binary(OP_RSUB, int_types, VOID);
     failed += test_binary(OP_MUL, int_types, VOID);
-    failed += test_binary(OP_BAND, int_types, INT);    
+    failed += test_binary(OP_BAND, int_types, INT);
+    failed += test_binary(OP_BANDN, int_types, INT);
     failed += test_binary(OP_BOR, int_types, INT);        
     failed += test_binary(OP_BXOR, int_types, INT);
     failed += test_bshift(OP_SLL, int_types, INT);
@@ -1012,6 +1015,10 @@ int main()
     failed += test_imm8(OP_SUBI, int_types, INT);
     failed += test_imm8(OP_RSUBI, int_types, INT);
     failed += test_imm8(OP_MULI, int_types, INT);
+    failed += test_imm8(OP_BANDI, int_types, INT);
+    failed += test_imm8(OP_BANDNI, int_types, INT);
+    failed += test_imm8(OP_BORI, int_types, INT);
+    failed += test_imm8(OP_BXORI, int_types, INT);
     failed += test_shift(OP_SLLI, int_types, INT);
     failed += test_shift(OP_SRLI, int_types, INT);
     failed += test_shift(OP_SRAI, int_types, INT);
@@ -1036,6 +1043,7 @@ int main()
     failed += test_bshift(OP_VSRL, int_types, INT);
     failed += test_bshift(OP_VSRA, int_types, INT);
     failed += test_binary(OP_VBAND, all_types, INT);
+    failed += test_binary(OP_VBANDN, all_types, INT);    
     failed += test_binary(OP_VBOR, all_types, INT);
     failed += test_binary(OP_VBXOR, all_types, INT);
     failed += test_binary(OP_VCMPLT, all_types, INT);
@@ -1053,6 +1061,7 @@ int main()
     failed += test_shift(OP_VSRLI, int_types, INT);
     failed += test_shift(OP_VSRAI, int_types, INT);
     failed += test_imm8(OP_VBANDI, all_types, INT);
+    failed += test_imm8(OP_VBANDNI, all_types, INT);
     failed += test_imm8(OP_VBORI, all_types, INT);
     failed += test_imm8(OP_VBXORI, all_types, INT);    
     failed += test_imm8(OP_VCMPLTI, all_types, INT);

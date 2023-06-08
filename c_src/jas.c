@@ -9,7 +9,7 @@
 #include "jitter_types.h"
 #include "jitter.h"
 
-#define MAX_PROG_SIZE 1024
+#define MAX_PROG_SIZE (128*1024)
 #define MAX_LINE_SIZE 1024
 #define MAX_OPERANDS  8
 
@@ -444,6 +444,9 @@ static inline char* scan_token(char* ptr, int* twp, token_t* tp)
 int pp = 0;
 instr_t prog[MAX_PROG_SIZE];
 
+// emit_instruction
+// should probably be piped directly to jitter_x86:emit_instruction
+//
 void emit_instruction(int line, token_t label, token_t instruction,
 		      token_t* operand, size_t n)
 {

@@ -15,6 +15,7 @@
 #define op_bnot(x) (~(x))
 #define op_bor(x,y) ((x)|(y))
 #define op_band(x,y) ((x)&(y))
+#define op_bandn(x,y) (~(x)&(y))
 #define op_bxor(x,y) ((x)^(y))
 #define op_cmpeq(x,y) (-((x)==(y)))
 #define op_cmplt(x,y) (-((x)<(y)))
@@ -757,6 +758,28 @@ void emu_vbandi(uint8_t type, vregfile_t* rfp, int d, int i, int8_t imm)
     vi_di8(type,d,i,imm,op_band);    
 }
 
+void emu_bandn(uint8_t type, vregfile_t* rfp, int d, int i, int j)
+{
+    TFURdij(type,d,i,j,op_bandn);
+}
+
+void emu_bandni(uint8_t type, vregfile_t* rfp, int d, int i, int8_t imm)
+{
+    EMU_XXS_rrb(type,d,i,imm,op_bandn);
+//    TFRdi8(type,d,i,imm,op_band);
+}
+
+void emu_vbandn(uint8_t type, vregfile_t* rfp, int d, int i, int j)
+{
+    (void) type;
+    KFFVdij(vu64,vu64,d,i,j,op_bandn);    
+}
+
+void emu_vbandni(uint8_t type, vregfile_t* rfp, int d, int i, int8_t imm)
+{
+    vi_di8(type,d,i,imm,op_bandn);    
+}
+
 void emu_bori(uint8_t type, vregfile_t* rfp, int d, int i, int8_t imm)
 {
     EMU_XXS_rrb(type,d,i,imm,op_bor);
@@ -985,6 +1008,11 @@ next:
     case OP_BANDI: emu_bandi(p->type, rfp, p->rd, p->ri, p->imm8); break;
     case OP_VBAND: emu_vband(p->type, rfp, p->rd, p->ri, p->rj); break;
     case OP_VBANDI: emu_vbandi(p->type, rfp, p->rd, p->ri, p->imm8); break;
+
+    case OP_BANDN: emu_bandn(p->type, rfp, p->rd, p->ri, p->rj); break;
+    case OP_BANDNI: emu_bandni(p->type, rfp, p->rd, p->ri, p->imm8); break;
+    case OP_VBANDN: emu_vbandn(p->type, rfp, p->rd, p->ri, p->rj); break;
+    case OP_VBANDNI: emu_vbandni(p->type, rfp, p->rd, p->ri, p->imm8); break;	
 	
     case OP_BXOR: emu_bxor(p->type, rfp, p->rd, p->ri, p->rj); break;
     case OP_BXORI: emu_bxori(p->type, rfp, p->rd, p->ri, p->imm8); break;

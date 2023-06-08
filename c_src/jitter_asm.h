@@ -13,9 +13,12 @@ extern void crash(const char* filename, int line, int code);
 #define VEC_TYPE_SSE    (1 << 1)
 #define VEC_TYPE_SSE2   (1 << 2)
 #define VEC_TYPE_SSE3   (1 << 3)
-#define VEC_TYPE_SSE4_1 (1 << 4)
-#define VEC_TYPE_AVX    (1 << 5)
-#define VEC_TYPE_AVX2   (1 << 6)
+#define VEC_TYPE_SSSE3  (1 << 4)
+#define VEC_TYPE_SSE4_1 (1 << 5)
+#define VEC_TYPE_SSE4_2 (1 << 6)
+#define VEC_TYPE_AVX    (1 << 7)
+#define VEC_TYPE_AVX2   (1 << 8)
+
 // all vector flags
 #define VEC_TYPE_VEC    (0x7f)
 
@@ -32,6 +35,10 @@ class ZAssembler : public x86::Assembler {
     unsigned vec_enabled;
     uint16_t r_free_mask;
     uint16_t x_free_mask;
+
+//    RegAlloc* r_alloc;   // allocate general registers
+//    RegAlloc* v_alloc;   // allocate vector registers
+//    RegAlloc* f_alloc;   // allocate floating point registers
 
 public:
     ZAssembler(CodeHolder* code, size_t zone_size) : x86::Assembler(code) {
@@ -52,8 +59,12 @@ public:
 		vec_available |= VEC_TYPE_SSE2;
 	    if (code->cpuFeatures().x86().hasSSE3())
 		vec_available |= VEC_TYPE_SSE3;
+	    if (code->cpuFeatures().x86().hasSSSE3())
+		vec_available |= VEC_TYPE_SSSE3;	    
 	    if (code->cpuFeatures().x86().hasSSE4_1())
 		vec_available |= VEC_TYPE_SSE4_1;
+	    if (code->cpuFeatures().x86().hasSSE4_2())
+		vec_available |= VEC_TYPE_SSE4_2;	    
 	    if (code->cpuFeatures().x86().hasAVX())
 		vec_available |= VEC_TYPE_AVX;
 	    if (code->cpuFeatures().x86().hasAVX2())
@@ -76,7 +87,9 @@ public:
     bool has_sse() { return (vec_available & VEC_TYPE_SSE) != 0; }
     bool has_sse2() { return (vec_available & VEC_TYPE_SSE2) != 0; }
     bool has_sse3() { return (vec_available & VEC_TYPE_SSE3) != 0; }
+    bool has_ssse3() { return (vec_available & VEC_TYPE_SSSE3) != 0; }    
     bool has_sse4_1() { return (vec_available & VEC_TYPE_SSE4_1) != 0; }
+    bool has_sse4_2() { return (vec_available & VEC_TYPE_SSE4_1) != 0; }
     bool has_avx() { return (vec_available & VEC_TYPE_AVX) != 0; }
     bool has_avx2() { return (vec_available & VEC_TYPE_AVX2) != 0; }
 
@@ -87,7 +100,9 @@ public:
     bool use_sse() { return (vec_enabled & VEC_TYPE_SSE) != 0; }
     bool use_sse2() { return (vec_enabled & VEC_TYPE_SSE2) != 0; }
     bool use_sse3() { return (vec_enabled & VEC_TYPE_SSE3) != 0; }
+    bool use_ssse3() { return (vec_enabled & VEC_TYPE_SSSE3) != 0; }
     bool use_sse4_1() { return (vec_enabled & VEC_TYPE_SSE4_1) != 0; }
+    bool use_sse4_2() { return (vec_enabled & VEC_TYPE_SSE4_2) != 0; }    
     bool use_avx() { return (vec_enabled & VEC_TYPE_AVX) != 0; }
     bool use_avx2() { return (vec_enabled & VEC_TYPE_AVX2) != 0; }        
 
@@ -98,8 +113,10 @@ public:
     void disable_avx2() { vec_enabled &= ~(VEC_TYPE_AVX2); }
     void disable_sse() { vec_enabled &= ~(VEC_TYPE_SSE); }
     void disable_sse2() { vec_enabled &= ~(VEC_TYPE_SSE2); }
-    void disable_sse3() { vec_enabled &= ~(VEC_TYPE_SSE3); }    
+    void disable_sse3() { vec_enabled &= ~(VEC_TYPE_SSE3); }
+    void disable_ssse3() { vec_enabled &= ~(VEC_TYPE_SSE3); }        
     void disable_sse4_1() { vec_enabled &= ~(VEC_TYPE_SSE4_1); }
+    void disable_sse4_2() { vec_enabled &= ~(VEC_TYPE_SSE4_2); }    
 
     void enable(unsigned mask) { vec_enabled |= (vec_available & mask); }
     void enable_vec() { vec_enabled |= (vec_available & VEC_TYPE_VEC); }        
@@ -109,7 +126,9 @@ public:
     void enable_sse() { vec_enabled |= (vec_available & VEC_TYPE_SSE); }    
     void enable_sse2() {vec_enabled |= (vec_available & VEC_TYPE_SSE2); }
     void enable_sse3() {vec_enabled |= (vec_available & VEC_TYPE_SSE3); }
+    void enable_ssse3() {vec_enabled |= (vec_available & VEC_TYPE_SSSE3); }    
     void enable_sse4_1() {vec_enabled |= (vec_available & VEC_TYPE_SSE4_1); }
+    void enable_sse4_2() {vec_enabled |= (vec_available & VEC_TYPE_SSE4_2); }
 
     void set_func_frame(FuncFrame* frame) {
 	frame_ = frame;
@@ -182,10 +201,7 @@ public:
     void xreg_release(int v) { x_free_mask |= ((1 << v) & X_FREE_MASK); }
 };
 
-typedef uint8_t st_t[10];
-typedef uint8_t mm_t __attribute__ ((vector_size (8)));
-typedef uint8_t xmm_t __attribute__ ((vector_size (16)));
-typedef uint8_t data128_t[16];
+
 
 typedef union {
     struct {
@@ -228,7 +244,6 @@ typedef struct {
     uint128_t avail[3];
 } fxsave32_t;
 
-
 typedef struct {
     uint16_t fcw;   // x87 FPU control word
     uint16_t fsw;   // x87 FPU Status word
@@ -263,6 +278,5 @@ typedef struct {
     uint128_t _rsvdst_mm[3];
     uint128_t avail[3];
 } fxsave64_0_t;
-
 
 #endif
